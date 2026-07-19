@@ -5,7 +5,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Year;
 import java.util.List;
-import java.util.Locale;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,6 +28,7 @@ import rw.ac.auca.caseflow.web.dto.CaseResponse;
 import rw.ac.auca.caseflow.web.dto.DecisionRequest;
 import rw.ac.auca.caseflow.web.dto.NewCaseRequest;
 import rw.ac.auca.caseflow.web.dto.NoteRequest;
+import rw.ac.auca.caseflow.web.dto.ReintegrationRequest;
 import rw.ac.auca.caseflow.web.dto.StatusUpdateRequest;
 
 @RestController
@@ -82,7 +82,7 @@ public class CaseController {
         DisciplinaryCase disciplinaryCase = findOrThrow(id);
         disciplinaryCase.setStatus(request.status());
         disciplinaryCase.addAuditEntry(new AuditEntry(
-                "Status set to: " + display(request.status()), actorOrSystem(request.by()), Instant.now()));
+                "Status set to: " + request.status().wireValue(), actorOrSystem(request.by()), Instant.now()));
         return CaseResponse.from(caseRepository.save(disciplinaryCase));
     }
 
@@ -90,8 +90,18 @@ public class CaseController {
     public CaseResponse addNote(@PathVariable String id, @Valid @RequestBody NoteRequest request) {
         DisciplinaryCase disciplinaryCase = findOrThrow(id);
         Instant now = Instant.now();
+
+        boolean statusChanged = disciplinaryCase.getStatus() == CaseStatus.REPORTED;
+        if (statusChanged) {
+            disciplinaryCase.setStatus(CaseStatus.UNDER_REVIEW);
+        }
         disciplinaryCase.addNote(new Note(request.author(), request.text(), now));
+        if (statusChanged) {
+            disciplinaryCase.addAuditEntry(new AuditEntry(
+                    "Status set to: " + CaseStatus.UNDER_REVIEW.wireValue(), request.author(), now));
+        }
         disciplinaryCase.addAuditEntry(new AuditEntry("Note Added", request.author(), now));
+
         return CaseResponse.from(caseRepository.save(disciplinaryCase));
     }
 
@@ -100,15 +110,21 @@ public class CaseController {
         DisciplinaryCase disciplinaryCase = findOrThrow(id);
         String actor = actorOrSystem(request.by());
         Instant now = Instant.now();
+        boolean needsSuspension = request.decision() == DecisionType.SEMESTER_SUSPENSION
+                || request.decision() == DecisionType.EXPULSION;
+        RegistrationStatus newRegStatus = needsSuspension ? RegistrationStatus.RESTRICTED : RegistrationStatus.ACTIVE;
 
-        disciplinaryCase.recordDecision(request.decision(), LocalDate.now(), request.suspensionStart(), request.suspensionEnd());
+        disciplinaryCase.recordDecision(
+                request.decision(),
+                LocalDate.now(),
+                needsSuspension ? request.suspensionStart() : null,
+                needsSuspension ? request.suspensionEnd() : null);
         disciplinaryCase.setStatus(CaseStatus.DECIDED);
-        disciplinaryCase.addAuditEntry(new AuditEntry("Decision Recorded: " + display(request.decision()), actor, now));
-
-        if (request.decision() == DecisionType.SEMESTER_SUSPENSION || request.decision() == DecisionType.EXPULSION) {
-            disciplinaryCase.setRegistrationStatus(RegistrationStatus.RESTRICTED);
-            disciplinaryCase.addAuditEntry(new AuditEntry("Registration Status: RESTRICTED", "System", now));
-        }
+        disciplinaryCase.setRegistrationStatus(newRegStatus);
+        disciplinaryCase.addAuditEntry(new AuditEntry(
+                "Decision Recorded: " + request.decision().wireValue(), actor, now));
+        disciplinaryCase.addAuditEntry(new AuditEntry(
+                "Registration Status: " + newRegStatus.name(), "System", now));
         disciplinaryCase.addAuditEntry(new AuditEntry("Student Notified via Email", "System", now));
 
         return CaseResponse.from(caseRepository.save(disciplinaryCase));
@@ -122,7 +138,8 @@ public class CaseController {
         disciplinaryCase.submitAppeal(request.appealText());
         disciplinaryCase.setStatus(CaseStatus.UNDER_APPEAL);
         disciplinaryCase.addAuditEntry(new AuditEntry("Appeal Submitted by Student", disciplinaryCase.getStudentName(), now));
-        disciplinaryCase.addAuditEntry(new AuditEntry("Status set to: " + display(CaseStatus.UNDER_APPEAL), "System", now));
+        disciplinaryCase.addAuditEntry(new AuditEntry(
+                "Status set to: " + CaseStatus.UNDER_APPEAL.wireValue(), "System", now));
 
         return CaseResponse.from(caseRepository.save(disciplinaryCase));
     }
@@ -132,15 +149,33 @@ public class CaseController {
         DisciplinaryCase disciplinaryCase = findOrThrow(id);
         String actor = actorOrSystem(request.by());
         Instant now = Instant.now();
+        boolean overturned = request.resolution() == AppealStatus.OVERTURNED;
 
         disciplinaryCase.resolveAppeal(request.resolution());
-        disciplinaryCase.setStatus(CaseStatus.RESOLVED);
-        disciplinaryCase.addAuditEntry(new AuditEntry("Appeal " + display(request.resolution()), actor, now));
+        disciplinaryCase.setStatus(overturned ? CaseStatus.RESOLVED : CaseStatus.DECIDED);
+        disciplinaryCase.addAuditEntry(new AuditEntry(
+                "Appeal " + request.resolution().wireValue() + " by Committee", actor, now));
 
-        if (request.resolution() == AppealStatus.OVERTURNED) {
+        if (overturned) {
             disciplinaryCase.setRegistrationStatus(RegistrationStatus.ACTIVE);
             disciplinaryCase.addAuditEntry(new AuditEntry("Registration Status: ACTIVE", "System", now));
+            disciplinaryCase.addAuditEntry(new AuditEntry("Case Resolved", "System", now));
         }
+
+        return CaseResponse.from(caseRepository.save(disciplinaryCase));
+    }
+
+    @PostMapping("/{id}/reintegration")
+    public CaseResponse approveReintegration(@PathVariable String id, @Valid @RequestBody ReintegrationRequest request) {
+        DisciplinaryCase disciplinaryCase = findOrThrow(id);
+        String actor = actorOrSystem(request.by());
+        Instant now = Instant.now();
+
+        disciplinaryCase.setStatus(CaseStatus.RESOLVED);
+        disciplinaryCase.setRegistrationStatus(RegistrationStatus.ACTIVE);
+        disciplinaryCase.addAuditEntry(new AuditEntry("Re-integration Approved", actor, now));
+        disciplinaryCase.addAuditEntry(new AuditEntry("Registration Status: ACTIVE", "System", now));
+        disciplinaryCase.addAuditEntry(new AuditEntry("Case Closed", "System", now));
 
         return CaseResponse.from(caseRepository.save(disciplinaryCase));
     }
@@ -158,18 +193,5 @@ public class CaseController {
 
     private static String actorOrSystem(String by) {
         return (by == null || by.isBlank()) ? "System" : by;
-    }
-
-    private static String display(Enum<?> value) {
-        String[] words = value.name().split("_");
-        StringBuilder result = new StringBuilder();
-        for (String word : words) {
-            if (!result.isEmpty()) {
-                result.append(' ');
-            }
-            result.append(word.substring(0, 1).toUpperCase(Locale.ROOT))
-                    .append(word.substring(1).toLowerCase(Locale.ROOT));
-        }
-        return result.toString();
     }
 }
