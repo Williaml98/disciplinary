@@ -7,7 +7,7 @@ This is a new project — there's no prior backend to promote (unlike `CaseFlow-
 ## Getting started
 
 ```bash
-docker compose up -d     # starts Postgres (database CaseFlowDB) on localhost:5434
+docker compose up -d     # starts Postgres (CaseFlowDB, :5434) and Mailpit (SMTP catcher)
 ./mvnw spring-boot:run
 ```
 
@@ -16,6 +16,14 @@ The API listens on http://localhost:8080. Data is **persistent** — it lives in
 Postgres runs on `5434` (not the default `5432`) to avoid clashing with any other local Postgres instance — connection details (db `CaseFlowDB`, user/password `caseflow`/`caseflow`) are in `docker-compose.yml` and must match `application.yml`. These are local-dev-only credentials; externalize them before this goes anywhere near a shared environment.
 
 Tests do **not** need Postgres/Docker running — `./mvnw test` uses an in-memory H2 database configured in `src/test/resources/application.yml`, which overrides the main config on the test classpath.
+
+## Email (SMTP)
+
+Decision notifications ("Student Notified via Email" in the audit trail) send a real email if the student has a matching `AppUser` account — looked up by `studentId`; if there's no match, it's silently skipped (many seeded cases don't have a corresponding demo account, e.g. `CF-2026-002`).
+
+Config is read from environment variables (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_AUTH`, `SMTP_STARTTLS`, `SMTP_FROM`), loaded from a `.env` file at the project root via `spring-dotenv` — copy `.env.example` to `.env` and fill in real values for a real provider. `.env` is gitignored; never commit it.
+
+**Local dev needs no setup at all.** With no `.env` present, `application.yml`'s defaults point at the `mailpit` service `docker compose up -d` already started — an unauthenticated local SMTP catcher. Every email the backend sends shows up at **http://localhost:8025**, nothing leaves the machine.
 
 Demo accounts (password `demo1234` for all): `mcuwase@auca.ac.rw` (lecturer), `ekayitesi@auca.ac.rw` (committee), `jbhabimana@student.auca.ac.rw` (student), `amutoni@auca.ac.rw` (admin).
 
@@ -56,5 +64,6 @@ Passwords are hashed with BCrypt (`spring-security-crypto`); there's no session/
 - `domain/` — JPA entities (`AppUser`, `DisciplinaryCase`, `Note`, `AuditEntry`) and enums (`Role`, `CaseStatus`, `DecisionType`, `RegistrationStatus`, `AppealStatus`).
 - `repository/` — Spring Data JPA repositories.
 - `web/` — REST controllers (`AuthController`, `UserController`, `CaseController`) and their request/response DTOs under `web/dto/`.
+- `email/EmailService.java` — thin wrapper over `JavaMailSender`; swallows and logs send failures rather than throwing, so a broken SMTP config never breaks the underlying case/user action.
 - `config/DataSeeder.java` — seeds demo users and cases on startup (skipped if the database already has data).
-- `docker-compose.yml` — the Postgres service used for local dev; not used by tests.
+- `docker-compose.yml` — Postgres + Mailpit services used for local dev; not used by tests.
