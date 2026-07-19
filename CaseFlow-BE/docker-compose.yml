@@ -11,5 +11,12 @@ services:
     volumes:
       - caseflow-postgres-data:/var/lib/postgresql/data
 
+  mailpit:
+    image: axllent/mailpit
+    container_name: caseflow-mailpit
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # web UI at http://localhost:8025
+
 volumes:
   caseflow-postgres-data:
