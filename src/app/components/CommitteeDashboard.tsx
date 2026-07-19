@@ -202,7 +202,6 @@ export function CommitteeDashboard({ user, cases, setCases, onLogout, onUpdatePr
             {selectedCase ? (
               <CommitteeCaseDetail
                 c={selectedCase}
-                user={user}
                 noteText={noteText}
                 setNoteText={setNoteText}
                 onAddNote={addNote}
@@ -273,11 +272,11 @@ export function CommitteeDashboard({ user, cases, setCases, onLogout, onUpdatePr
 }
 
 function CommitteeCaseDetail({
-  c, user, noteText, setNoteText, onAddNote,
+  c, noteText, setNoteText, onAddNote,
   decision, setDecision, suspStart, setSuspStart, suspEnd, setSuspEnd, onRecordDecision,
   appealAction, setAppealAction, onResolveAppeal
 }: {
-  c: DisciplinaryCase; user: AppUser;
+  c: DisciplinaryCase;
   noteText: string; setNoteText: (v: string) => void; onAddNote: () => void;
   decision: DecisionType | ''; setDecision: (v: DecisionType | '') => void;
   suspStart: string; setSuspStart: (v: string) => void;

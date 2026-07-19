@@ -9,7 +9,6 @@ interface Props {
   users: AppUser[];
   setUsers: React.Dispatch<React.SetStateAction<AppUser[]>>;
   cases: DisciplinaryCase[];
-  setCases: React.Dispatch<React.SetStateAction<DisciplinaryCase[]>>;
   onLogout: () => void;
   onUpdateProfile: (updated: AppUser) => void;
 }
@@ -48,7 +47,7 @@ const ROLE_COLORS: Record<Role, string> = {
   admin: 'bg-[#1D3A5F]/10 text-[#1D3A5F] border-[#1D3A5F]/20',
 };
 
-export function AdminDashboard({ user, users, setUsers, cases, setCases, onLogout, onUpdateProfile }: Props) {
+export function AdminDashboard({ user, users, setUsers, cases, onLogout, onUpdateProfile }: Props) {
   const [activeNav, setActiveNav] = useState('overview');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
