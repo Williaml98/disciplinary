@@ -19,7 +19,7 @@ Tests do **not** need Postgres/Docker running — `./mvnw test` uses an in-memor
 
 ## Email (SMTP)
 
-Decision notifications ("Student Notified via Email" in the audit trail) send a real email if the student has a matching `AppUser` account — looked up by `studentId`; if there's no match, it's silently skipped (many seeded cases don't have a corresponding demo account, e.g. `CF-2026-002`).
+Three case actions send a real email, each logged as "Student Notified via Email" in the audit trail: `POST /api/cases/{id}/decision` (decision recorded), `POST /api/cases/{id}/appeal/resolution` (appeal outcome), and `POST /api/cases/{id}/reintegration` (re-integration approved). All three look the student up by `studentId` against `AppUser`; if there's no match, sending is silently skipped (many seeded cases don't have a corresponding demo account, e.g. `CF-2026-002`).
 
 Config is read from environment variables (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_AUTH`, `SMTP_STARTTLS`, `SMTP_FROM`), loaded from a `.env` file at the project root via `spring-dotenv` — copy `.env.example` to `.env` and fill in real values for a real provider. `.env` is gitignored; never commit it.
 
@@ -54,8 +54,8 @@ Demo accounts (password `demo1234` for all): `mcuwase@auca.ac.rw` (lecturer), `e
 | `POST /api/cases/{id}/notes` | Add a committee deliberation note (auto-transitions `Reported` → `Under Review`) |
 | `POST /api/cases/{id}/decision` | Record a committee decision (sets `registrationStatus` to `Restricted` for suspension/expulsion, `Active` otherwise) |
 | `POST /api/cases/{id}/appeal` | Submit a student appeal |
-| `POST /api/cases/{id}/appeal/resolution` | Resolve an appeal (`Overturned` → case `Resolved` + registration reactivated; `Upheld` → stays `Decided`) |
-| `POST /api/cases/{id}/reintegration` | Approve re-integration after a suspension ends (`Resolved` + registration reactivated) |
+| `POST /api/cases/{id}/appeal/resolution` | Resolve an appeal (`Overturned` → case `Resolved` + registration reactivated; `Upheld` → stays `Decided`); emails the student |
+| `POST /api/cases/{id}/reintegration` | Approve re-integration after a suspension ends (`Resolved` + registration reactivated); emails the student |
 
 Passwords are hashed with BCrypt (`spring-security-crypto`); there's no session/token layer yet, so every endpoint is currently open — add real authentication before this goes anywhere near production.
 

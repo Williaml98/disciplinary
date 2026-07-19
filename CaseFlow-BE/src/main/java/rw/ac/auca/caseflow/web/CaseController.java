@@ -168,6 +168,8 @@ public class CaseController {
             disciplinaryCase.addAuditEntry(new AuditEntry("Registration Status: ACTIVE", "System", now));
             disciplinaryCase.addAuditEntry(new AuditEntry("Case Resolved", "System", now));
         }
+        disciplinaryCase.addAuditEntry(new AuditEntry("Student Notified via Email", "System", now));
+        notifyStudentOfAppealResolution(disciplinaryCase);
 
         return CaseResponse.from(caseRepository.save(disciplinaryCase));
     }
@@ -183,6 +185,8 @@ public class CaseController {
         disciplinaryCase.addAuditEntry(new AuditEntry("Re-integration Approved", actor, now));
         disciplinaryCase.addAuditEntry(new AuditEntry("Registration Status: ACTIVE", "System", now));
         disciplinaryCase.addAuditEntry(new AuditEntry("Case Closed", "System", now));
+        disciplinaryCase.addAuditEntry(new AuditEntry("Student Notified via Email", "System", now));
+        notifyStudentOfReintegration(disciplinaryCase);
 
         return CaseResponse.from(caseRepository.save(disciplinaryCase));
     }
@@ -220,6 +224,47 @@ public class CaseController {
                     disciplinaryCase.getId(),
                     disciplinaryCase.getOffenseType(),
                     disciplinaryCase.getDecision().wireValue());
+            emailService.send(student.getEmail(), subject, body);
+        });
+    }
+
+    private void notifyStudentOfAppealResolution(DisciplinaryCase disciplinaryCase) {
+        userRepository.findByStudentId(disciplinaryCase.getStudentId()).ifPresent(student -> {
+            String subject = "CaseFlow: Appeal outcome for case " + disciplinaryCase.getId();
+            String body = """
+                    Dear %s,
+
+                    The committee has reached a decision on your appeal for disciplinary case %s (%s).
+
+                    Appeal outcome: %s
+
+                    Please log in to CaseFlow for full details.
+
+                    — AUCA Disciplinary Committee
+                    """.formatted(
+                    disciplinaryCase.getStudentName(),
+                    disciplinaryCase.getId(),
+                    disciplinaryCase.getOffenseType(),
+                    disciplinaryCase.getAppealStatus().wireValue());
+            emailService.send(student.getEmail(), subject, body);
+        });
+    }
+
+    private void notifyStudentOfReintegration(DisciplinaryCase disciplinaryCase) {
+        userRepository.findByStudentId(disciplinaryCase.getStudentId()).ifPresent(student -> {
+            String subject = "CaseFlow: Re-integration approved for case " + disciplinaryCase.getId();
+            String body = """
+                    Dear %s,
+
+                    Your re-integration following disciplinary case %s (%s) has been approved. Your registration status is now Active.
+
+                    Please log in to CaseFlow for full details.
+
+                    — AUCA Disciplinary Committee
+                    """.formatted(
+                    disciplinaryCase.getStudentName(),
+                    disciplinaryCase.getId(),
+                    disciplinaryCase.getOffenseType());
             emailService.send(student.getEmail(), subject, body);
         });
     }
