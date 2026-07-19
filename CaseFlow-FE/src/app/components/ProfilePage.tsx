@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Eye, EyeOff, CheckCircle, AlertCircle, BookOpen, Users, GraduationCap, Settings, Camera } from 'lucide-react';
 import type { AppUser } from './mockData';
+import { updateUserProfile, changePassword, ApiError } from '../../lib/api';
 
 interface Props {
   user: AppUser;
@@ -36,6 +37,7 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
   const [extra, setExtra] = useState(user.studentId || user.department || '');
   const [profileErrors, setProfileErrors] = useState<Record<string, string>>({});
   const [profileSuccess, setProfileSuccess] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
 
   // Password state
   const [currentPw, setCurrentPw] = useState('');
@@ -46,11 +48,12 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [pwErrors, setPwErrors] = useState<Record<string, string>>({});
   const [pwSuccess, setPwSuccess] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
 
   const initials = user.name.split(' ').map(n => n[0]).slice(0, 2).join('');
   const isStudent = user.role === 'student';
 
-  function saveProfile(e: React.FormEvent) {
+  async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
     setProfileSuccess(false);
     const errors: Record<string, string> = {};
@@ -61,23 +64,28 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
     setProfileErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
-    const updated: AppUser = {
-      ...user,
-      name: name.trim(),
-      email: email.trim(),
-      ...(isStudent ? { studentId: extra.trim(), department: undefined } : { department: extra.trim(), studentId: undefined }),
-    };
-    onUpdate(updated);
-    setProfileSuccess(true);
-    setTimeout(() => setProfileSuccess(false), 4000);
+    setSavingProfile(true);
+    try {
+      const updated = await updateUserProfile(user.id, {
+        name: name.trim(),
+        email: email.trim(),
+        ...(isStudent ? { studentId: extra.trim() } : { department: extra.trim() }),
+      });
+      onUpdate(updated);
+      setProfileSuccess(true);
+      setTimeout(() => setProfileSuccess(false), 4000);
+    } catch (err) {
+      setProfileErrors({ email: err instanceof ApiError ? err.message : 'Unable to save profile. Please try again.' });
+    } finally {
+      setSavingProfile(false);
+    }
   }
 
-  function savePassword(e: React.FormEvent) {
+  async function savePassword(e: React.FormEvent) {
     e.preventDefault();
     setPwSuccess(false);
     const errors: Record<string, string> = {};
     if (!currentPw) errors.current = 'Please enter your current password.';
-    else if (currentPw !== user.password) errors.current = 'Current password is incorrect.';
     if (!newPw) errors.new = 'New password is required.';
     else if (newPw.length < 8) errors.new = 'Password must be at least 8 characters.';
     if (newPw === currentPw) errors.new = 'New password must be different from the current one.';
@@ -85,12 +93,19 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
     setPwErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
-    onUpdate({ ...user, password: newPw });
-    setPwSuccess(true);
-    setCurrentPw('');
-    setNewPw('');
-    setConfirmPw('');
-    setTimeout(() => setPwSuccess(false), 4000);
+    setSavingPassword(true);
+    try {
+      await changePassword(user.id, currentPw, newPw);
+      setPwSuccess(true);
+      setCurrentPw('');
+      setNewPw('');
+      setConfirmPw('');
+      setTimeout(() => setPwSuccess(false), 4000);
+    } catch (err) {
+      setPwErrors({ current: err instanceof ApiError ? err.message : 'Unable to change password. Please try again.' });
+    } finally {
+      setSavingPassword(false);
+    }
   }
 
   return (
@@ -205,10 +220,11 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
             <div className="pt-1">
               <button
                 type="submit"
-                className="text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity"
+                disabled={savingProfile}
+                className="text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
                 style={{ backgroundColor: '#1D3A5F' }}
               >
-                Save Changes
+                {savingProfile ? 'Saving…' : 'Save Changes'}
               </button>
             </div>
           </form>
@@ -285,10 +301,11 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
             <div className="pt-1">
               <button
                 type="submit"
-                className="text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity"
+                disabled={savingPassword}
+                className="text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
                 style={{ backgroundColor: '#1D3A5F' }}
               >
-                Update Password
+                {savingPassword ? 'Updating…' : 'Update Password'}
               </button>
             </div>
           </form>

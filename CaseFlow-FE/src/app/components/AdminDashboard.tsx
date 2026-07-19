@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { LayoutDashboard, AlertTriangle, List, Clock, Search, ChevronRight, Bell, UserCog, Plus, Eye, EyeOff, CheckCircle, AlertCircle, BookOpen, Users, GraduationCap, Settings, Pencil, X } from 'lucide-react';
 import { DashboardLayout, PageHeader, StatusBadge } from './DashboardLayout';
 import type { AppUser, DisciplinaryCase, Role } from './mockData';
+import { createUser, updateUserRole, deleteUser as apiDeleteUser, ApiError } from '../../lib/api';
 
 interface Props {
   user: AppUser;
@@ -53,7 +54,7 @@ export function AdminDashboard({ user, users, setUsers, cases, onLogout, onUpdat
   const [statusFilter, setStatusFilter] = useState('All');
   const [selectedCase, setSelectedCase] = useState<DisciplinaryCase | null>(null);
 
-  const today = '2026-06-27';
+  const today = new Date().toISOString().slice(0, 10);
 
   const activeSuspensions = cases.filter(c => c.registrationStatus === 'Restricted' && c.suspensionEnd && c.suspensionEnd >= today);
   const expiredSuspensions = cases.filter(c => c.registrationStatus === 'Restricted' && c.suspensionEnd && c.suspensionEnd < today);
@@ -307,22 +308,41 @@ function UserManagement({ currentAdmin, users, setUsers }: {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<Role | 'all'>('all');
   const [toast, setToast] = useState('');
+  const [toastKind, setToastKind] = useState<'success' | 'error'>('success');
+  const [busyUserId, setBusyUserId] = useState<string | null>(null);
 
-  function showToast(msg: string) {
+  function showToast(msg: string, kind: 'success' | 'error' = 'success') {
     setToast(msg);
+    setToastKind(kind);
     setTimeout(() => setToast(''), 3000);
   }
 
-  function changeRole(userId: string, newRole: Role) {
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
-    setEditingUserId(null);
-    showToast('Role updated successfully.');
+  async function changeRole(userId: string, newRole: Role) {
+    setBusyUserId(userId);
+    try {
+      const updated = await updateUserRole(userId, newRole);
+      setUsers(prev => prev.map(u => u.id === userId ? updated : u));
+      setEditingUserId(null);
+      showToast('Role updated successfully.');
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : 'Unable to update role.', 'error');
+    } finally {
+      setBusyUserId(null);
+    }
   }
 
-  function deleteUser(userId: string) {
+  async function deleteUser(userId: string) {
     if (userId === currentAdmin.id) return;
-    setUsers(prev => prev.filter(u => u.id !== userId));
-    showToast('Account removed.');
+    setBusyUserId(userId);
+    try {
+      await apiDeleteUser(userId);
+      setUsers(prev => prev.filter(u => u.id !== userId));
+      showToast('Account removed.');
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : 'Unable to remove account.', 'error');
+    } finally {
+      setBusyUserId(null);
+    }
   }
 
   function handleCreate(newUser: AppUser) {
@@ -361,8 +381,13 @@ function UserManagement({ currentAdmin, users, setUsers }: {
 
       {/* Toast */}
       {toast && (
-        <div className="mx-8 mt-4 flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 rounded-xl px-4 py-3 text-sm">
-          <CheckCircle size={14} className="text-green-600 shrink-0" /> {toast}
+        <div className={`mx-8 mt-4 flex items-center gap-2 rounded-xl px-4 py-3 text-sm ${
+          toastKind === 'error' ? 'bg-red-50 border border-red-200 text-red-800' : 'bg-green-50 border border-green-200 text-green-800'
+        }`}>
+          {toastKind === 'error'
+            ? <AlertCircle size={14} className="text-red-600 shrink-0" />
+            : <CheckCircle size={14} className="text-green-600 shrink-0" />}
+          {toast}
         </div>
       )}
 
@@ -415,8 +440,9 @@ function UserManagement({ currentAdmin, users, setUsers }: {
                       <div className="flex items-center gap-2">
                         <select
                           defaultValue={u.role}
+                          disabled={busyUserId === u.id}
                           onChange={e => changeRole(u.id, e.target.value as Role)}
-                          className="border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
+                          className="border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none disabled:opacity-60"
                           onFocus={focusStyleSelect}
                           onBlur={blurStyleSelect}
                           autoFocus
@@ -447,13 +473,13 @@ function UserManagement({ currentAdmin, users, setUsers }: {
                     <div className="flex items-center gap-3">
                       {u.id !== currentAdmin.id && editingUserId !== u.id && (
                         <>
-                          <button onClick={() => setEditingUserId(u.id)}
-                            className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#1D3A5F] transition-colors">
+                          <button onClick={() => setEditingUserId(u.id)} disabled={busyUserId === u.id}
+                            className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#1D3A5F] disabled:opacity-60 transition-colors">
                             <Pencil size={12} /> Change Role
                           </button>
-                          <button onClick={() => deleteUser(u.id)}
-                            className="text-xs text-red-400 hover:text-red-600 transition-colors">
-                            Remove
+                          <button onClick={() => deleteUser(u.id)} disabled={busyUserId === u.id}
+                            className="text-xs text-red-400 hover:text-red-600 disabled:opacity-60 transition-colors">
+                            {busyUserId === u.id ? 'Removing…' : 'Remove'}
                           </button>
                         </>
                       )}
@@ -489,6 +515,7 @@ function CreateAccountModal({ users, onCreate, onClose }: {
   const [form, setFormState] = useState({ name: '', email: '', role: '' as Role | '', studentId: '', department: '', password: '', confirmPassword: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [creating, setCreating] = useState(false);
 
   const isStudent = form.role === 'student';
   const needsDept = form.role === 'lecturer' || form.role === 'committee' || form.role === 'admin';
@@ -512,21 +539,28 @@ function CreateAccountModal({ users, onCreate, onClose }: {
     return e;
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const errs = validate();
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
-    const newUser: AppUser = {
-      id: `u${Date.now()}`,
-      name: form.name.trim(),
-      email: form.email.trim(),
-      role: form.role as Role,
-      password: form.password,
-      ...(isStudent ? { studentId: form.studentId.trim() } : {}),
-      ...(needsDept ? { department: form.department.trim() } : {}),
-    };
-    onCreate(newUser);
+
+    setCreating(true);
+    try {
+      const newUser = await createUser({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        role: form.role as Role,
+        password: form.password,
+        ...(isStudent ? { studentId: form.studentId.trim() } : {}),
+        ...(needsDept ? { department: form.department.trim() } : {}),
+      });
+      onCreate(newUser);
+    } catch (err) {
+      setErrors({ email: err instanceof ApiError ? err.message : 'Unable to create account. Please try again.' });
+    } finally {
+      setCreating(false);
+    }
   }
 
   return (
@@ -598,8 +632,8 @@ function CreateAccountModal({ users, onCreate, onClose }: {
             </ModalField>
 
             <div className="pt-2 space-y-2">
-              <button type="submit" className="w-full text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 transition-opacity" style={{ backgroundColor: '#1D3A5F' }}>
-                Create Account
+              <button type="submit" disabled={creating} className="w-full text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity" style={{ backgroundColor: '#1D3A5F' }}>
+                {creating ? 'Creating Account…' : 'Create Account'}
               </button>
               <button type="button" onClick={onClose} className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl py-2.5 text-sm transition-colors">
                 Cancel
