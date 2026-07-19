@@ -10,6 +10,13 @@ spring:
     hibernate:
       ddl-auto: update
     open-in-view: false
+  mail:
+    host: localhost
+    port: 1025
+
+caseflow:
+  mail:
+    from: noreply@auca.ac.rw
 
 server:
   error:

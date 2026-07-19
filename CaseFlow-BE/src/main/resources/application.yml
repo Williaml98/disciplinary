@@ -10,6 +10,21 @@ spring:
     hibernate:
       ddl-auto: update
     open-in-view: false
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SMTP_AUTH:false}
+          starttls:
+            enable: ${SMTP_STARTTLS:false}
+
+caseflow:
+  mail:
+    from: ${SMTP_FROM:noreply@auca.ac.rw}
 
 server:
   port: 8080

@@ -1,5 +1,8 @@
 target/
 
+# Env
+.env
+
 # Editor / OS
 .DS_Store
 .idea
