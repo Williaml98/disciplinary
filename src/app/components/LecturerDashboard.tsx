@@ -1,0 +1,295 @@
+import { useState } from 'react';
+import { FilePlus, List, ChevronRight, Paperclip, AlertCircle } from 'lucide-react';
+import { DashboardLayout, PageHeader, StatusBadge } from './DashboardLayout';
+import type { AppUser, DisciplinaryCase } from './mockData';
+
+interface Props {
+  user: AppUser;
+  cases: DisciplinaryCase[];
+  setCases: React.Dispatch<React.SetStateAction<DisciplinaryCase[]>>;
+  onLogout: () => void;
+  onUpdateProfile: (updated: AppUser) => void;
+}
+
+const OFFENSE_TYPES = [
+  'Exam Cheating',
+  'Academic Plagiarism',
+  'Unauthorized Collaboration',
+  'Disruptive Behavior',
+  'Document Forgery',
+  'Misconduct',
+  'Property Damage',
+  'Harassment',
+  'Other',
+];
+
+const navItems = [
+  { id: 'report', label: 'Report New Incident', icon: <FilePlus size={16} /> },
+  { id: 'mycases', label: 'My Reported Cases', icon: <List size={16} /> },
+];
+
+export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdateProfile }: Props) {
+  const [activeNav, setActiveNav] = useState('report');
+  const [form, setForm] = useState({
+    studentName: '',
+    studentId: '',
+    offenseType: '',
+    description: '',
+    evidence: '',
+  });
+  const [submitted, setSubmitted] = useState(false);
+  const [selectedCase, setSelectedCase] = useState<DisciplinaryCase | null>(null);
+
+  const myCases = cases.filter(c => c.reportedBy === user.name);
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const now = new Date();
+    const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const date = timestamp.slice(0, 10);
+    const id = `CF-${now.getFullYear()}-${String(cases.length + 1).padStart(3, '0')}`;
+
+    const newCase: DisciplinaryCase = {
+      id,
+      studentName: form.studentName,
+      studentId: form.studentId,
+      reportedBy: user.name,
+      reporterDepartment: user.department || '',
+      offenseType: form.offenseType,
+      description: form.description,
+      evidence: form.evidence || 'No evidence attached',
+      reportDate: date,
+      status: 'Reported',
+      notes: [],
+      auditTrail: [
+        { action: 'Incident Reported', by: user.name, timestamp },
+        { action: `Case ${id} Created`, by: 'System', timestamp },
+        { action: 'Committee Chair Notified', by: 'System', timestamp },
+      ],
+      appealSubmitted: false,
+      registrationStatus: 'Flagged',
+    };
+
+    setCases(prev => [newCase, ...prev]);
+    setSubmitted(true);
+    setForm({ studentName: '', studentId: '', offenseType: '', description: '', evidence: '' });
+    setTimeout(() => setSubmitted(false), 5000);
+  }
+
+  const myCaseBadge = myCases.length;
+
+  return (
+    <DashboardLayout
+      user={user}
+      onLogout={onLogout}
+      onUpdateProfile={onUpdateProfile}
+      navItems={navItems.map(n => n.id === 'mycases' ? { ...n, badge: myCaseBadge } : n)}
+      activeNav={activeNav}
+      onNavChange={id => { setActiveNav(id); setSelectedCase(null); }}
+    >
+      {activeNav === 'report' && (
+        <>
+          <PageHeader title="Report New Incident" subtitle="Submit a disciplinary incident for committee review" />
+          <div className="flex-1 overflow-y-auto p-4 sm:p-8">
+            <div className="max-w-2xl mx-auto">
+              {submitted && (
+                <div className="mb-6 bg-green-50 border border-green-200 text-green-800 rounded-xl p-4 flex items-center gap-3">
+                  <AlertCircle size={18} className="text-green-600 shrink-0" />
+                  <div>
+                    <p className="font-medium text-sm">Incident reported successfully</p>
+                    <p className="text-xs mt-0.5 text-green-700">The case has been created and the disciplinary committee has been notified.</p>
+                  </div>
+                </div>
+              )}
+              <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Student Information</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-700 mb-1.5">Student Full Name <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        required
+                        value={form.studentName}
+                        onChange={e => setForm(f => ({ ...f, studentName: e.target.value }))}
+                        placeholder="e.g. Jean Bosco Habimana"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3A5F] focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-700 mb-1.5">Student ID <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        required
+                        value={form.studentId}
+                        onChange={e => setForm(f => ({ ...f, studentId: e.target.value }))}
+                        placeholder="e.g. 21045"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3A5F] focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-gray-100 pt-5">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Incident Details</p>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm text-gray-700 mb-1.5">Offense Type <span className="text-red-500">*</span></label>
+                      <select
+                        required
+                        value={form.offenseType}
+                        onChange={e => setForm(f => ({ ...f, offenseType: e.target.value }))}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3A5F] focus:border-transparent bg-white"
+                      >
+                        <option value="">Select offense type...</option>
+                        {OFFENSE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-700 mb-1.5">Description of Incident <span className="text-red-500">*</span></label>
+                      <textarea
+                        required
+                        rows={5}
+                        value={form.description}
+                        onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                        placeholder="Provide a detailed description of the incident, including date, time, location, and what occurred..."
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3A5F] focus:border-transparent resize-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-700 mb-1.5">
+                        <span className="flex items-center gap-1.5"><Paperclip size={14} /> Evidence Description</span>
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={form.evidence}
+                        onChange={e => setForm(f => ({ ...f, evidence: e.target.value }))}
+                        placeholder="Describe any physical or digital evidence (e.g. confiscated notes, screenshots, witness statements)..."
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3A5F] focus:border-transparent resize-none"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">Physical evidence should be submitted to the Student Affairs office with case reference number.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-gray-100 pt-5">
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+                    <p className="text-xs text-amber-800">
+                      <strong>Note:</strong> By submitting this form, you confirm that the information provided is accurate and complete to the best of your knowledge. Submitting false reports is itself a disciplinary offense.
+                    </p>
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full bg-[#1D3A5F] hover:bg-[#162d4a] text-white rounded-xl py-3 text-sm font-medium transition-colors"
+                  >
+                    Submit Incident Report
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </>
+      )}
+
+      {activeNav === 'mycases' && (
+        <>
+          <PageHeader
+            title="My Reported Cases"
+            subtitle={`${myCases.length} case${myCases.length !== 1 ? 's' : ''} submitted by you`}
+          />
+          {selectedCase ? (
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8">
+              <button
+                onClick={() => setSelectedCase(null)}
+                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 mb-5 transition-colors"
+              >
+                ← Back to cases
+              </button>
+              <CaseDetailReadOnly c={selectedCase} />
+            </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8">
+              {myCases.length === 0 ? (
+                <div className="text-center py-16 text-gray-400">
+                  <FilePlus size={40} className="mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">No cases reported yet.</p>
+                  <p className="text-xs mt-1">Use "Report New Incident" to submit a case.</p>
+                </div>
+              ) : (
+                <div className="max-w-3xl mx-auto space-y-3">
+                  {myCases.map(c => (
+                    <button
+                      key={c.id}
+                      onClick={() => setSelectedCase(c)}
+                      className="w-full bg-white border border-gray-200 rounded-2xl p-5 text-left hover:border-[#1D3A5F]/40 hover:shadow-sm transition-all group"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className="text-xs font-mono text-gray-400">{c.id}</span>
+                            <StatusBadge status={c.status} />
+                          </div>
+                          <p className="text-sm text-gray-900">{c.studentName} — <span className="text-gray-500">{c.offenseType}</span></p>
+                          <p className="text-xs text-gray-400 mt-1">Reported {c.reportDate}</p>
+                        </div>
+                        <ChevronRight size={16} className="text-gray-400 group-hover:text-[#1D3A5F] transition-colors mt-1 shrink-0" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </DashboardLayout>
+  );
+}
+
+function CaseDetailReadOnly({ c }: { c: DisciplinaryCase }) {
+  return (
+    <div className="max-w-3xl mx-auto space-y-4">
+      <div className="bg-white rounded-2xl border border-gray-200 p-6">
+        <div className="flex items-start justify-between mb-5">
+          <div>
+            <p className="text-xs font-mono text-gray-400 mb-1">{c.id}</p>
+            <h2 className="text-lg text-gray-900">{c.studentName}</h2>
+            <p className="text-sm text-gray-500">Student ID: {c.studentId}</p>
+          </div>
+          <StatusBadge status={c.status} />
+        </div>
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div><span className="text-gray-500">Offense:</span> <span className="text-gray-900 ml-1">{c.offenseType}</span></div>
+          <div><span className="text-gray-500">Reported:</span> <span className="text-gray-900 ml-1">{c.reportDate}</span></div>
+          {c.decision && <div><span className="text-gray-500">Decision:</span> <span className="ml-1"><StatusBadge status={c.decision} /></span></div>}
+          <div><span className="text-gray-500">Registration:</span> <span className="ml-1"><StatusBadge status={c.registrationStatus} /></span></div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-200 p-6">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Description</p>
+        <p className="text-sm text-gray-700 leading-relaxed">{c.description}</p>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-4 mb-2">Evidence Submitted</p>
+        <p className="text-sm text-gray-700">{c.evidence}</p>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-200 p-6">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Case Timeline</p>
+        <div className="space-y-3">
+          {c.auditTrail.map((entry, i) => (
+            <div key={i} className="flex gap-3">
+              <div className="flex flex-col items-center">
+                <div className="w-2 h-2 rounded-full bg-[#1D3A5F] mt-1.5 shrink-0" />
+                {i < c.auditTrail.length - 1 && <div className="w-px flex-1 bg-gray-200 mt-1" />}
+              </div>
+              <div className="pb-3 min-w-0">
+                <p className="text-sm text-gray-800">{entry.action}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{entry.by} · {entry.timestamp}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

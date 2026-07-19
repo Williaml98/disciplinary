@@ -1,0 +1,577 @@
+import { useState, useEffect, useRef } from 'react';
+import { Eye, EyeOff, AlertCircle, CheckCircle, Zap, GraduationCap, Users, BookOpen, Settings, ArrowLeft, Mail, RefreshCw, ShieldCheck } from 'lucide-react';
+import { DEMO_USERS, type AppUser, type Role } from './mockData';
+import logo from '../../imports/logo.png';
+
+interface LoginPageProps {
+  users: AppUser[];
+  onLogin: (user: AppUser) => void;
+  onRegister: (user: AppUser) => void;
+}
+
+const ROLE_ICONS: Record<Role, React.ReactNode> = {
+  lecturer: <BookOpen size={13} />,
+  committee: <Users size={13} />,
+  student: <GraduationCap size={13} />,
+  admin: <Settings size={13} />,
+};
+
+const ROLE_LABELS: Record<Role, string> = {
+  lecturer: 'Lecturer / Invigilator',
+  committee: 'Committee Member',
+  student: 'Student',
+  admin: 'Registrar / Admin',
+};
+
+function maskEmail(email: string): string {
+  const [local, domain] = email.split('@');
+  if (!domain) return email;
+  const visible = local[0] ?? '';
+  const stars = '*'.repeat(Math.min(local.length - 1, 5));
+  return `${visible}${stars}@${domain}`;
+}
+
+export function LoginPage({ users, onLogin, onRegister }: LoginPageProps) {
+  const [view, setView] = useState<'login' | 'register'>('login');
+
+  return (
+    <div className="min-h-screen flex">
+      {/* Left branding panel */}
+      <div className="hidden lg:flex lg:w-5/12 flex-col justify-between p-10 text-white" style={{ backgroundColor: '#1D3A5F' }}>
+        <div>
+          <div className="flex items-center gap-3 mb-12">
+            <img src={logo} alt="AUCA Logo" className="w-12 h-12 rounded-full bg-white p-0.5 object-cover" />
+            <div>
+              <p className="font-bold text-lg leading-tight">CaseFlow</p>
+              <p className="text-white/50 text-xs">AUCA</p>
+            </div>
+          </div>
+          <h2 className="text-3xl leading-snug mb-4">Student Disciplinary Case Management System</h2>
+          <p className="text-white/60 text-sm leading-relaxed">
+            A secure, transparent platform for managing the full lifecycle of student disciplinary cases — from incident reporting through committee review, decision, and re-integration.
+          </p>
+        </div>
+        <div className="space-y-3">
+          {[
+            'Digital incident reporting with evidence tracking',
+            'Online committee review and deliberation workspace',
+            'Real-time case status visibility for students',
+            'Automated registration enforcement and alerts',
+            'Verifiable re-integration records',
+          ].map((f, i) => (
+            <div key={i} className="flex items-start gap-2.5">
+              <CheckCircle size={14} className="text-white/50 mt-0.5 shrink-0" />
+              <span className="text-white/60 text-sm">{f}</span>
+            </div>
+          ))}
+          <p className="text-white/30 text-xs pt-4">Adventist University of Central Africa · Rwanda</p>
+        </div>
+      </div>
+
+      {/* Right form panel */}
+      <div className="flex-1 flex flex-col overflow-y-auto bg-gray-50">
+        <div className="lg:hidden flex items-center gap-3 p-6 pb-0" style={{ color: '#1D3A5F' }}>
+          <img src={logo} alt="AUCA Logo" className="w-9 h-9 rounded-full bg-white border border-gray-200 object-cover" />
+          <span className="font-bold text-base">CaseFlow</span>
+        </div>
+        <div className="flex-1 flex items-start sm:items-center justify-center p-5 sm:p-8 py-8">
+          <div className="w-full max-w-md">
+            {view === 'login' ? (
+              <LoginForm users={users} onLogin={onLogin} onSwitchToRegister={() => setView('register')} />
+            ) : (
+              <RegisterForm users={users} onRegister={onRegister} onSwitchToLogin={() => setView('login')} />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────
+   LOGIN FORM
+───────────────────────────────────────── */
+function LoginForm({ users, onLogin, onSwitchToRegister }: {
+  users: AppUser[];
+  onLogin: (user: AppUser) => void;
+  onSwitchToRegister: () => void;
+}) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    const user = users.find(u => u.email.toLowerCase() === email.trim().toLowerCase());
+    if (!user) { setError('No account found with this email address.'); return; }
+    if (user.password !== password) { setError('Incorrect password. Please try again.'); return; }
+    onLogin(user);
+  }
+
+  return (
+    <div>
+      <div className="mb-8">
+        <h1 className="text-2xl text-gray-900 mb-1">Welcome back</h1>
+        <p className="text-sm text-gray-500">Sign in to your CaseFlow account</p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4 mb-6">
+        <div>
+          <label className="block text-sm text-gray-700 mb-1.5">Email address</label>
+          <input type="email" required value={email}
+            onChange={e => { setEmail(e.target.value); setError(''); }}
+            placeholder="you@auca.ac.rw"
+            className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none"
+            onFocus={focusStyle} onBlur={blurStyle} />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-700 mb-1.5">Password</label>
+          <div className="relative">
+            <input type={showPassword ? 'text' : 'password'} required value={password}
+              onChange={e => { setPassword(e.target.value); setError(''); }}
+              placeholder="Enter your password"
+              className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none pr-11"
+              onFocus={focusStyle} onBlur={blurStyle} />
+            <button type="button" onClick={() => setShowPassword(s => !s)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+            <AlertCircle size={15} className="shrink-0" />
+            <p className="text-sm">{error}</p>
+          </div>
+        )}
+
+        <button type="submit" className="w-full text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 transition-opacity"
+          style={{ backgroundColor: '#1D3A5F' }}>
+          Sign in
+        </button>
+      </form>
+
+      <p className="text-center text-sm text-gray-500 mb-8">
+        Are you a student?{' '}
+        <button onClick={onSwitchToRegister} className="font-medium hover:opacity-80 transition-opacity" style={{ color: '#1D3A5F' }}>
+          Create a student account
+        </button>
+      </p>
+
+      {/* Demo accounts */}
+      <div className="border-t border-gray-200 pt-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Zap size={13} className="text-amber-500" />
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Demo Accounts</p>
+          <span className="text-xs text-gray-400">· password: demo1234</span>
+        </div>
+        <div className="space-y-2">
+          {DEMO_USERS.map(user => (
+            <button key={user.id} onClick={() => onLogin(user)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all text-left">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs shrink-0" style={{ backgroundColor: '#1D3A5F' }}>
+                  {user.name.split(' ').map(n => n[0]).slice(0, 2).join('')}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm text-gray-800 truncate">{user.name}</p>
+                  <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                </div>
+              </div>
+              <span className="flex items-center gap-1 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full shrink-0 whitespace-nowrap ml-2">
+                {ROLE_ICONS[user.role]}
+                <span className="hidden sm:inline">{ROLE_LABELS[user.role]}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────
+   REGISTER FORM  (3-step OTP flow)
+───────────────────────────────────────── */
+type RegStep = 'details' | 'otp' | 'password';
+
+interface Details { name: string; studentId: string; email: string; }
+
+function RegisterForm({ users, onRegister, onSwitchToLogin }: {
+  users: AppUser[];
+  onRegister: (user: AppUser) => void;
+  onSwitchToLogin: () => void;
+}) {
+  const [step, setStep] = useState<RegStep>('details');
+  const [details, setDetails] = useState<Details>({ name: '', studentId: '', email: '' });
+  const [detailErrors, setDetailErrors] = useState<Record<string, string>>({});
+
+  const [generatedOtp, setGeneratedOtp] = useState('');
+  const [enteredOtp, setEnteredOtp] = useState('');
+  const [otpError, setOtpError] = useState('');
+  const [countdown, setCountdown] = useState(0);
+
+  const [password, setPassword] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pwErrors, setPwErrors] = useState<Record<string, string>>({});
+  const [success, setSuccess] = useState(false);
+
+  // Countdown tick
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const t = setTimeout(() => setCountdown(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [countdown]);
+
+  function generateAndSendOtp() {
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    setGeneratedOtp(code);
+    setEnteredOtp('');
+    setOtpError('');
+    setCountdown(60);
+    return code;
+  }
+
+  function handleSendOtp(e: React.FormEvent) {
+    e.preventDefault();
+    const errors: Record<string, string> = {};
+    if (!details.name.trim()) errors.name = 'Full name is required.';
+    if (!details.studentId.trim()) errors.studentId = 'Student ID is required.';
+    if (!details.email.trim()) errors.email = 'Email is required.';
+    else if (users.some(u => u.email.toLowerCase() === details.email.trim().toLowerCase()))
+      errors.email = 'An account with this email already exists.';
+    setDetailErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+    generateAndSendOtp();
+    setStep('otp');
+  }
+
+  function handleResend() {
+    generateAndSendOtp();
+  }
+
+  function handleVerifyOtp(e: React.FormEvent) {
+    e.preventDefault();
+    if (enteredOtp.length < 6) { setOtpError('Please enter the complete 6-digit code.'); return; }
+    if (enteredOtp !== generatedOtp) { setOtpError('Incorrect code. Please check and try again.'); return; }
+    setOtpError('');
+    setStep('password');
+  }
+
+  function handleCreateAccount(e: React.FormEvent) {
+    e.preventDefault();
+    const errors: Record<string, string> = {};
+    if (!password) errors.password = 'Password is required.';
+    else if (password.length < 8) errors.password = 'Minimum 8 characters.';
+    if (confirmPw !== password) errors.confirm = 'Passwords do not match.';
+    setPwErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    const newUser: AppUser = {
+      id: `u${Date.now()}`,
+      name: details.name.trim(),
+      email: details.email.trim(),
+      role: 'student',
+      studentId: details.studentId.trim(),
+      password,
+    };
+    setSuccess(true);
+    setTimeout(() => onRegister(newUser), 1200);
+  }
+
+  if (success) {
+    return (
+      <div className="text-center py-16">
+        <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#1D3A5F' }}>
+          <CheckCircle size={30} className="text-white" />
+        </div>
+        <h2 className="text-xl text-gray-900 mb-2">Account created!</h2>
+        <p className="text-sm text-gray-500">Signing you in now…</p>
+      </div>
+    );
+  }
+
+  const stepIndex = step === 'details' ? 0 : step === 'otp' ? 1 : 2;
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="text-2xl text-gray-900 mb-1">Create Student Account</h1>
+        <p className="text-sm text-gray-500">Students only · Staff accounts are issued by the Registrar</p>
+      </div>
+
+      {/* Step progress */}
+      <div className="flex items-center gap-2 mb-8">
+        {(['details', 'otp', 'password'] as RegStep[]).map((s, i) => (
+          <div key={s} className="flex items-center gap-2 flex-1">
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-all ${
+              i < stepIndex ? 'text-white' : i === stepIndex ? 'text-white' : 'bg-gray-200 text-gray-400'
+            }`} style={i <= stepIndex ? { backgroundColor: '#1D3A5F' } : {}}>
+              {i < stepIndex ? <CheckCircle size={14} /> : i + 1}
+            </div>
+            <span className={`text-xs hidden sm:block whitespace-nowrap ${i === stepIndex ? 'text-gray-700' : 'text-gray-400'}`}>
+              {s === 'details' ? 'Your Details' : s === 'otp' ? 'Verify Email' : 'Set Password'}
+            </span>
+            {i < 2 && <div className={`flex-1 h-px ml-1 ${i < stepIndex ? 'bg-[#1D3A5F]' : 'bg-gray-200'}`} />}
+          </div>
+        ))}
+      </div>
+
+      {/* ── STEP 1: Details ── */}
+      {step === 'details' && (
+        <form onSubmit={handleSendOtp} className="space-y-4">
+          <div className="flex items-center gap-2 bg-[#1D3A5F]/5 border border-[#1D3A5F]/20 rounded-xl px-4 py-2.5 mb-2">
+            <GraduationCap size={15} className="text-[#1D3A5F] shrink-0" />
+            <span className="text-sm text-[#1D3A5F]">Registering as: <strong>Student</strong></span>
+          </div>
+
+          <RegField label="Full Name" error={detailErrors.name}>
+            <input type="text" value={details.name}
+              onChange={e => { setDetails(d => ({ ...d, name: e.target.value })); setDetailErrors(p => ({ ...p, name: '' })); }}
+              placeholder="e.g. Jean Bosco Habimana"
+              className={inputCls(!!detailErrors.name)} onFocus={focusStyle} onBlur={blurStyle} />
+          </RegField>
+
+          <RegField label="Student ID" error={detailErrors.studentId}>
+            <input type="text" value={details.studentId}
+              onChange={e => { setDetails(d => ({ ...d, studentId: e.target.value })); setDetailErrors(p => ({ ...p, studentId: '' })); }}
+              placeholder="e.g. 21045"
+              className={inputCls(!!detailErrors.studentId)} onFocus={focusStyle} onBlur={blurStyle} />
+          </RegField>
+
+          <RegField label="Email Address" error={detailErrors.email}>
+            <input type="email" value={details.email}
+              onChange={e => { setDetails(d => ({ ...d, email: e.target.value })); setDetailErrors(p => ({ ...p, email: '' })); }}
+              placeholder="you@student.auca.ac.rw"
+              className={inputCls(!!detailErrors.email)} onFocus={focusStyle} onBlur={blurStyle} />
+          </RegField>
+
+          <button type="submit" className="w-full flex items-center justify-center gap-2 text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 transition-opacity mt-2"
+            style={{ backgroundColor: '#1D3A5F' }}>
+            <Mail size={15} /> Send Verification Code
+          </button>
+
+          <p className="text-center text-sm text-gray-500 pt-1">
+            Already have an account?{' '}
+            <button type="button" onClick={onSwitchToLogin} className="font-medium hover:opacity-80 transition-opacity" style={{ color: '#1D3A5F' }}>
+              Sign in
+            </button>
+          </p>
+        </form>
+      )}
+
+      {/* ── STEP 2: OTP ── */}
+      {step === 'otp' && (
+        <form onSubmit={handleVerifyOtp} className="space-y-5">
+          <div className="text-center mb-2">
+            <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#1D3A5F' }}>
+              <Mail size={24} className="text-white" />
+            </div>
+            <p className="text-sm text-gray-700">We sent a 6-digit code to</p>
+            <p className="font-medium text-gray-900 mt-0.5">{maskEmail(details.email)}</p>
+          </div>
+
+          {/* Demo OTP notice */}
+          <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            <Zap size={15} className="text-amber-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs text-amber-800 font-semibold mb-0.5">Demo Mode</p>
+              <p className="text-xs text-amber-700">
+                In production this would be emailed. Your OTP is:{' '}
+                <span className="font-mono font-bold text-amber-900 tracking-widest">{generatedOtp}</span>
+              </p>
+            </div>
+          </div>
+
+          {/* OTP input boxes */}
+          <div>
+            <label className="block text-sm text-gray-700 mb-3 text-center">Enter verification code</label>
+            <OtpBoxes value={enteredOtp} onChange={v => { setEnteredOtp(v); setOtpError(''); }} />
+            {otpError && (
+              <p className="text-xs text-red-600 mt-2 flex items-center justify-center gap-1">
+                <AlertCircle size={11} /> {otpError}
+              </p>
+            )}
+          </div>
+
+          <button type="submit" className="w-full flex items-center justify-center gap-2 text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 transition-opacity"
+            style={{ backgroundColor: '#1D3A5F' }}>
+            <ShieldCheck size={15} /> Verify Code
+          </button>
+
+          {/* Resend */}
+          <div className="text-center text-sm text-gray-500">
+            {countdown > 0 ? (
+              <span>Resend code in <span className="font-medium" style={{ color: '#1D3A5F' }}>{countdown}s</span></span>
+            ) : (
+              <button type="button" onClick={handleResend}
+                className="flex items-center gap-1.5 mx-auto font-medium hover:opacity-80 transition-opacity"
+                style={{ color: '#1D3A5F' }}>
+                <RefreshCw size={13} /> Resend OTP
+              </button>
+            )}
+          </div>
+
+          <button type="button" onClick={() => setStep('details')}
+            className="w-full flex items-center justify-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors">
+            <ArrowLeft size={14} /> Back
+          </button>
+        </form>
+      )}
+
+      {/* ── STEP 3: Password ── */}
+      {step === 'password' && (
+        <form onSubmit={handleCreateAccount} className="space-y-4">
+          <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-2">
+            <CheckCircle size={16} className="text-green-600 shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-green-800">Email verified</p>
+              <p className="text-xs text-green-700">{details.email}</p>
+            </div>
+          </div>
+
+          <p className="text-sm text-gray-600">Choose a secure password for your account.</p>
+
+          <RegField label="New Password" error={pwErrors.password}>
+            <div className="relative">
+              <input type={showPw ? 'text' : 'password'} value={password}
+                onChange={e => { setPassword(e.target.value); setPwErrors(p => ({ ...p, password: '' })); }}
+                placeholder="Minimum 8 characters"
+                className={inputCls(!!pwErrors.password) + ' pr-11'} onFocus={focusStyle} onBlur={blurStyle} />
+              <button type="button" onClick={() => setShowPw(s => !s)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+            {password.length >= 8 && !pwErrors.password && (
+              <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><CheckCircle size={11} /> Strong password</p>
+            )}
+          </RegField>
+
+          <RegField label="Confirm Password" error={pwErrors.confirm}>
+            <div className="relative">
+              <input type={showConfirm ? 'text' : 'password'} value={confirmPw}
+                onChange={e => { setConfirmPw(e.target.value); setPwErrors(p => ({ ...p, confirm: '' })); }}
+                placeholder="Re-enter your password"
+                className={inputCls(!!pwErrors.confirm) + ' pr-11'} onFocus={focusStyle} onBlur={blurStyle} />
+              <button type="button" onClick={() => setShowConfirm(s => !s)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </RegField>
+
+          <button type="submit" className="w-full text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 transition-opacity mt-2"
+            style={{ backgroundColor: '#1D3A5F' }}>
+            Create Account
+          </button>
+
+          <button type="button" onClick={() => setStep('otp')}
+            className="w-full flex items-center justify-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors">
+            <ArrowLeft size={14} /> Back
+          </button>
+        </form>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────
+   OTP BOXES COMPONENT
+───────────────────────────────────────── */
+function OtpBoxes({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const refs = useRef<(HTMLInputElement | null)[]>([]);
+  const digits = Array.from({ length: 6 }, (_, i) => value[i] ?? '');
+
+  function handleChange(i: number, ch: string) {
+    if (!/^\d*$/.test(ch)) return;
+    const next = [...digits];
+    next[i] = ch.slice(-1);
+    onChange(next.join(''));
+    if (ch && i < 5) refs.current[i + 1]?.focus();
+  }
+
+  function handleKeyDown(i: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Backspace') {
+      if (!digits[i] && i > 0) {
+        refs.current[i - 1]?.focus();
+      } else {
+        const next = [...digits];
+        next[i] = '';
+        onChange(next.join(''));
+      }
+    } else if (e.key === 'ArrowLeft' && i > 0) {
+      refs.current[i - 1]?.focus();
+    } else if (e.key === 'ArrowRight' && i < 5) {
+      refs.current[i + 1]?.focus();
+    }
+  }
+
+  function handlePaste(e: React.ClipboardEvent) {
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    onChange(pasted.padEnd(6, '').slice(0, 6).replace(/\s/g, ''));
+    const focusIdx = Math.min(pasted.length, 5);
+    setTimeout(() => refs.current[focusIdx]?.focus(), 0);
+    e.preventDefault();
+  }
+
+  return (
+    <div className="flex gap-2 sm:gap-3 justify-center">
+      {digits.map((d, i) => (
+        <input
+          key={i}
+          ref={el => refs.current[i] = el}
+          type="text"
+          inputMode="numeric"
+          maxLength={2}
+          value={d}
+          onChange={e => handleChange(i, e.target.value)}
+          onKeyDown={e => handleKeyDown(i, e)}
+          onPaste={handlePaste}
+          onFocus={e => e.currentTarget.select()}
+          className={`w-10 h-12 sm:w-12 sm:h-14 text-center border-2 rounded-xl text-lg font-mono font-bold focus:outline-none transition-all ${
+            d ? 'border-[#1D3A5F] bg-[#1D3A5F]/5 text-[#1D3A5F]' : 'border-gray-300 text-gray-700'
+          }`}
+          style={{ boxShadow: d ? '0 0 0 0px transparent' : undefined }}
+          onFocusCapture={e => { e.currentTarget.style.borderColor = '#1D3A5F'; e.currentTarget.style.boxShadow = '0 0 0 2px #1D3A5F30'; }}
+          onBlurCapture={e => { if (!e.currentTarget.value) { e.currentTarget.style.borderColor = ''; e.currentTarget.style.boxShadow = ''; } }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ── shared helpers ── */
+function RegField({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-sm text-gray-700 mb-1.5">{label}</label>
+      {children}
+      {error && (
+        <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+          <AlertCircle size={11} className="shrink-0" /> {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function inputCls(hasError: boolean) {
+  return `w-full border ${hasError ? 'border-red-400 bg-red-50' : 'border-gray-300'} rounded-xl px-4 py-2.5 text-sm focus:outline-none transition-colors`;
+}
+
+function focusStyle(e: React.FocusEvent<HTMLInputElement>) {
+  e.currentTarget.style.boxShadow = '0 0 0 2px #1D3A5F40';
+  e.currentTarget.style.borderColor = '#1D3A5F';
+}
+
+function blurStyle(e: React.FocusEvent<HTMLInputElement>) {
+  e.currentTarget.style.boxShadow = '';
+  e.currentTarget.style.borderColor = '';
+}
