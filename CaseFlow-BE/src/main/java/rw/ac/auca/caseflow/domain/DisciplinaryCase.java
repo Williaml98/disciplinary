@@ -72,6 +72,8 @@ public class DisciplinaryCase {
     @Column(nullable = false)
     private RegistrationStatus registrationStatus;
 
+    // EAGER: open-in-view is disabled, and CaseResponse always serializes these outside
+    // any transaction, so LAZY throws LazyInitializationException on every read.
     @OneToMany(mappedBy = "disciplinaryCase", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @OrderBy("timestamp asc")
     private List<Note> notes = new ArrayList<>();
