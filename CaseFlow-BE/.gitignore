@@ -1,0 +1,11 @@
+target/
+
+# Editor / OS
+.DS_Store
+.idea
+*.iml
+.vscode/*
+!.vscode/extensions.json
+
+# Logs
+*.log
