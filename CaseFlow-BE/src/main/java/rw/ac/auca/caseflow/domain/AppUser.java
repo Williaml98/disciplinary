@@ -62,6 +62,10 @@ public class AppUser {
         return role;
     }
 
+    public void setRole(Role role) {
+        this.role = role;
+    }
+
     public String getDepartment() {
         return department;
     }
@@ -72,6 +76,10 @@ public class AppUser {
 
     public String getStudentId() {
         return studentId;
+    }
+
+    public void setStudentId(String studentId) {
+        this.studentId = studentId;
     }
 
     public String getEmail() {
