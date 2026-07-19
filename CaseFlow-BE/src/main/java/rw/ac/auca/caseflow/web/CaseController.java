@@ -21,7 +21,9 @@ import rw.ac.auca.caseflow.domain.DecisionType;
 import rw.ac.auca.caseflow.domain.DisciplinaryCase;
 import rw.ac.auca.caseflow.domain.Note;
 import rw.ac.auca.caseflow.domain.RegistrationStatus;
+import rw.ac.auca.caseflow.email.EmailService;
 import rw.ac.auca.caseflow.repository.CaseRepository;
+import rw.ac.auca.caseflow.repository.UserRepository;
 import rw.ac.auca.caseflow.web.dto.AppealRequest;
 import rw.ac.auca.caseflow.web.dto.AppealResolutionRequest;
 import rw.ac.auca.caseflow.web.dto.CaseResponse;
@@ -36,9 +38,13 @@ import rw.ac.auca.caseflow.web.dto.StatusUpdateRequest;
 public class CaseController {
 
     private final CaseRepository caseRepository;
+    private final UserRepository userRepository;
+    private final EmailService emailService;
 
-    public CaseController(CaseRepository caseRepository) {
+    public CaseController(CaseRepository caseRepository, UserRepository userRepository, EmailService emailService) {
         this.caseRepository = caseRepository;
+        this.userRepository = userRepository;
+        this.emailService = emailService;
     }
 
     @GetMapping
@@ -126,6 +132,7 @@ public class CaseController {
         disciplinaryCase.addAuditEntry(new AuditEntry(
                 "Registration Status: " + newRegStatus.name(), "System", now));
         disciplinaryCase.addAuditEntry(new AuditEntry("Student Notified via Email", "System", now));
+        notifyStudentOfDecision(disciplinaryCase);
 
         return CaseResponse.from(caseRepository.save(disciplinaryCase));
     }
@@ -193,5 +200,27 @@ public class CaseController {
 
     private static String actorOrSystem(String by) {
         return (by == null || by.isBlank()) ? "System" : by;
+    }
+
+    private void notifyStudentOfDecision(DisciplinaryCase disciplinaryCase) {
+        userRepository.findByStudentId(disciplinaryCase.getStudentId()).ifPresent(student -> {
+            String subject = "CaseFlow: Decision recorded for case " + disciplinaryCase.getId();
+            String body = """
+                    Dear %s,
+
+                    A decision has been recorded for your disciplinary case %s (%s).
+
+                    Decision: %s
+
+                    Please log in to CaseFlow for full details.
+
+                    — AUCA Disciplinary Committee
+                    """.formatted(
+                    disciplinaryCase.getStudentName(),
+                    disciplinaryCase.getId(),
+                    disciplinaryCase.getOffenseType(),
+                    disciplinaryCase.getDecision().wireValue());
+            emailService.send(student.getEmail(), subject, body);
+        });
     }
 }
