@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { Eye, EyeOff, AlertCircle, CheckCircle, Zap, GraduationCap, Users, BookOpen, Settings, ArrowLeft, Mail, RefreshCw, ShieldCheck } from 'lucide-react';
-import { DEMO_USERS, type AppUser, type Role } from './mockData';
+import type { AppUser, Role } from './mockData';
+import { login, register, ApiError } from '../../lib/api';
 import logo from '../../imports/logo.png';
+
+const DEMO_PASSWORD = 'demo1234';
 
 interface LoginPageProps {
   users: AppUser[];
@@ -100,14 +103,33 @@ function LoginForm({ users, onLogin, onSwitchToRegister }: {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    const user = users.find(u => u.email.toLowerCase() === email.trim().toLowerCase());
-    if (!user) { setError('No account found with this email address.'); return; }
-    if (user.password !== password) { setError('Incorrect password. Please try again.'); return; }
-    onLogin(user);
+    setBusy(true);
+    try {
+      const user = await login(email.trim(), password);
+      onLogin(user);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Unable to sign in. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDemoLogin(user: AppUser) {
+    setError('');
+    setBusy(true);
+    try {
+      const loggedIn = await login(user.email, DEMO_PASSWORD);
+      onLogin(loggedIn);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Unable to sign in. Please try again.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -148,9 +170,9 @@ function LoginForm({ users, onLogin, onSwitchToRegister }: {
           </div>
         )}
 
-        <button type="submit" className="w-full text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 transition-opacity"
+        <button type="submit" disabled={busy} className="w-full text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
           style={{ backgroundColor: '#1D3A5F' }}>
-          Sign in
+          {busy ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
 
@@ -169,9 +191,9 @@ function LoginForm({ users, onLogin, onSwitchToRegister }: {
           <span className="text-xs text-gray-400">· password: demo1234</span>
         </div>
         <div className="space-y-2">
-          {DEMO_USERS.map(user => (
-            <button key={user.id} onClick={() => onLogin(user)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all text-left">
+          {users.map(user => (
+            <button key={user.id} disabled={busy} onClick={() => handleDemoLogin(user)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 disabled:opacity-60 transition-all text-left">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs shrink-0" style={{ backgroundColor: '#1D3A5F' }}>
                   {user.name.split(' ').map(n => n[0]).slice(0, 2).join('')}
@@ -220,6 +242,8 @@ function RegisterForm({ users, onRegister, onSwitchToLogin }: {
   const [showConfirm, setShowConfirm] = useState(false);
   const [pwErrors, setPwErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [creating, setCreating] = useState(false);
 
   // Countdown tick
   useEffect(() => {
@@ -263,8 +287,9 @@ function RegisterForm({ users, onRegister, onSwitchToLogin }: {
     setStep('password');
   }
 
-  function handleCreateAccount(e: React.FormEvent) {
+  async function handleCreateAccount(e: React.FormEvent) {
     e.preventDefault();
+    setCreateError('');
     const errors: Record<string, string> = {};
     if (!password) errors.password = 'Password is required.';
     else if (password.length < 8) errors.password = 'Minimum 8 characters.';
@@ -272,16 +297,21 @@ function RegisterForm({ users, onRegister, onSwitchToLogin }: {
     setPwErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
-    const newUser: AppUser = {
-      id: `u${Date.now()}`,
-      name: details.name.trim(),
-      email: details.email.trim(),
-      role: 'student',
-      studentId: details.studentId.trim(),
-      password,
-    };
-    setSuccess(true);
-    setTimeout(() => onRegister(newUser), 1200);
+    setCreating(true);
+    try {
+      const newUser = await register({
+        name: details.name.trim(),
+        studentId: details.studentId.trim(),
+        email: details.email.trim(),
+        password,
+      });
+      setSuccess(true);
+      setTimeout(() => onRegister(newUser), 1200);
+    } catch (err) {
+      setCreateError(err instanceof ApiError ? err.message : 'Unable to create your account. Please try again.');
+    } finally {
+      setCreating(false);
+    }
   }
 
   if (success) {
@@ -467,9 +497,16 @@ function RegisterForm({ users, onRegister, onSwitchToLogin }: {
             </div>
           </RegField>
 
-          <button type="submit" className="w-full text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 transition-opacity mt-2"
+          {createError && (
+            <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+              <AlertCircle size={15} className="shrink-0" />
+              <p className="text-sm">{createError}</p>
+            </div>
+          )}
+
+          <button type="submit" disabled={creating} className="w-full text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity mt-2"
             style={{ backgroundColor: '#1D3A5F' }}>
-            Create Account
+            {creating ? 'Creating Account…' : 'Create Account'}
           </button>
 
           <button type="button" onClick={() => setStep('otp')}
