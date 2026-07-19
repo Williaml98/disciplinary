@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import { Inbox, MessageSquare, CheckCircle, Search, UserCheck, ChevronRight, Send, AlertTriangle } from 'lucide-react';
 import { DashboardLayout, PageHeader, StatusBadge } from './DashboardLayout';
-import type { AppUser, DisciplinaryCase, DecisionType, CaseStatus, RegistrationStatus } from './mockData';
+import type { AppUser, DisciplinaryCase, DecisionType } from './mockData';
+import {
+  addCaseNote,
+  recordDecision as apiRecordDecision,
+  resolveAppeal as apiResolveAppeal,
+  approveReintegration as apiApproveReintegration,
+  ApiError,
+} from '../../lib/api';
 
 interface Props {
   user: AppUser;
@@ -23,126 +30,81 @@ export function CommitteeDashboard({ user, cases, setCases, onLogout, onUpdatePr
   const [searchId, setSearchId] = useState('');
   const [searchResult, setSearchResult] = useState<DisciplinaryCase[] | null>(null);
   const [appealAction, setAppealAction] = useState<'Upheld' | 'Overturned' | ''>('');
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState('');
 
   const queueCases = cases.filter(c => c.status === 'Reported' || c.status === 'Under Review');
   const appealCases = cases.filter(c => c.status === 'Under Appeal');
 
-  function refreshSelected(updatedCases: DisciplinaryCase[]) {
-    if (selectedCase) {
-      const fresh = updatedCases.find(c => c.id === selectedCase.id);
-      if (fresh) setSelectedCase(fresh);
+  function applyUpdatedCase(updated: DisciplinaryCase) {
+    setCases(prev => prev.map(c => c.id === updated.id ? updated : c));
+    setSelectedCase(prev => prev && prev.id === updated.id ? updated : prev);
+    setSearchResult(prev => prev ? prev.map(c => c.id === updated.id ? updated : c) : prev);
+  }
+
+  async function addNote() {
+    if (!noteText.trim() || !selectedCase) return;
+    setActionError('');
+    setBusy(true);
+    try {
+      const updated = await addCaseNote(selectedCase.id, user.name, noteText);
+      applyUpdatedCase(updated);
+      setNoteText('');
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Unable to add note. Please try again.');
+    } finally {
+      setBusy(false);
     }
   }
 
-  function addNote() {
-    if (!noteText.trim() || !selectedCase) return;
-    const now = new Date();
-    const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    setCases(prev => {
-      const updated = prev.map(c => {
-        if (c.id !== selectedCase.id) return c;
-        const newStatus: CaseStatus = c.status === 'Reported' ? 'Under Review' : c.status;
-        const statusChanged = c.status === 'Reported';
-        return {
-          ...c,
-          status: newStatus,
-          notes: [...c.notes, { id: `n${Date.now()}`, author: user.name, text: noteText, timestamp }],
-          auditTrail: [
-            ...c.auditTrail,
-            ...(statusChanged ? [{ action: 'Status set to: Under Review', by: user.name, timestamp }] : []),
-            { action: 'Note Added', by: user.name, timestamp },
-          ],
-        };
-      });
-      refreshSelected(updated);
-      return updated;
-    });
-    setNoteText('');
-  }
-
-  function recordDecision() {
+  async function recordDecision() {
     if (!decision || !selectedCase) return;
-    const now = new Date();
-    const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const date = timestamp.slice(0, 10);
-    const needsSuspension = decision === 'Semester Suspension' || decision === 'Expulsion';
-    const newRegStatus: RegistrationStatus = needsSuspension ? 'Restricted' : 'Active';
-
-    setCases(prev => {
-      const updated = prev.map(c => {
-        if (c.id !== selectedCase.id) return c;
-        return {
-          ...c,
-          status: 'Decided' as CaseStatus,
-          decision,
-          decisionDate: date,
-          suspensionStart: needsSuspension ? suspStart : undefined,
-          suspensionEnd: needsSuspension ? suspEnd : undefined,
-          registrationStatus: newRegStatus,
-          auditTrail: [
-            ...c.auditTrail,
-            { action: `Decision Recorded: ${decision}`, by: user.name, timestamp },
-            { action: `Registration Status: ${newRegStatus.toUpperCase()}`, by: 'System', timestamp },
-            { action: 'Student Notified via Email', by: 'System', timestamp },
-          ],
-        };
+    setActionError('');
+    setBusy(true);
+    try {
+      const updated = await apiRecordDecision(selectedCase.id, {
+        decision,
+        suspensionStart: suspStart || undefined,
+        suspensionEnd: suspEnd || undefined,
+        by: user.name,
       });
-      refreshSelected(updated);
-      return updated;
-    });
-    setDecision('');
-    setSuspStart('');
-    setSuspEnd('');
+      applyUpdatedCase(updated);
+      setDecision('');
+      setSuspStart('');
+      setSuspEnd('');
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Unable to record decision. Please try again.');
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function resolveAppeal() {
+  async function resolveAppeal() {
     if (!appealAction || !selectedCase) return;
-    const now = new Date();
-    const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    setCases(prev => {
-      const updated = prev.map(c => {
-        if (c.id !== selectedCase.id) return c;
-        const newStatus: CaseStatus = appealAction === 'Overturned' ? 'Resolved' : 'Decided';
-        const newRegStatus: RegistrationStatus = appealAction === 'Overturned' ? 'Active' : c.registrationStatus;
-        return {
-          ...c,
-          status: newStatus,
-          appealStatus: appealAction,
-          registrationStatus: newRegStatus,
-          auditTrail: [
-            ...c.auditTrail,
-            { action: `Appeal ${appealAction} by Committee`, by: user.name, timestamp },
-            ...(appealAction === 'Overturned' ? [{ action: 'Registration Status: ACTIVE', by: 'System', timestamp }, { action: 'Case Resolved', by: 'System', timestamp }] : []),
-          ],
-        };
-      });
-      refreshSelected(updated);
-      return updated;
-    });
-    setAppealAction('');
+    setActionError('');
+    setBusy(true);
+    try {
+      const updated = await apiResolveAppeal(selectedCase.id, appealAction, user.name);
+      applyUpdatedCase(updated);
+      setAppealAction('');
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Unable to resolve appeal. Please try again.');
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function approveReintegration(caseId: string) {
-    const now = new Date();
-    const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    setCases(prev => {
-      const updated = prev.map(c => {
-        if (c.id !== caseId) return c;
-        return {
-          ...c,
-          status: 'Resolved' as CaseStatus,
-          registrationStatus: 'Active' as RegistrationStatus,
-          auditTrail: [
-            ...c.auditTrail,
-            { action: 'Re-integration Approved', by: user.name, timestamp },
-            { action: 'Registration Status: ACTIVE', by: 'System', timestamp },
-            { action: 'Case Closed', by: 'System', timestamp },
-          ],
-        };
-      });
-      setSearchResult(updated.filter(c => c.studentId === searchId));
-      return updated;
-    });
+  async function approveReintegration(caseId: string) {
+    setActionError('');
+    setBusy(true);
+    try {
+      const updated = await apiApproveReintegration(caseId, user.name);
+      applyUpdatedCase(updated);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Unable to approve re-integration. Please try again.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   function handleSearch() {
@@ -215,6 +177,8 @@ export function CommitteeDashboard({ user, cases, setCases, onLogout, onUpdatePr
                 appealAction={appealAction}
                 setAppealAction={setAppealAction}
                 onResolveAppeal={resolveAppeal}
+                busy={busy}
+                actionError={actionError}
               />
             ) : (
               <div className="flex items-center justify-center h-full text-gray-400">
@@ -233,6 +197,12 @@ export function CommitteeDashboard({ user, cases, setCases, onLogout, onUpdatePr
           <PageHeader title="Re-integration Verification" subtitle="Confirm a student has served their suspension before clearing them to re-register" />
           <div className="flex-1 overflow-y-auto p-4 sm:p-8">
             <div className="max-w-2xl mx-auto">
+              {actionError && (
+                <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-6">
+                  <AlertTriangle size={15} className="shrink-0" />
+                  <p className="text-sm">{actionError}</p>
+                </div>
+              )}
               <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
                 <p className="text-sm text-gray-700 mb-4">Search by student ID number or name to retrieve their disciplinary record.</p>
                 <div className="flex gap-3">
@@ -258,7 +228,7 @@ export function CommitteeDashboard({ user, cases, setCases, onLogout, onUpdatePr
                 ) : (
                   <div className="space-y-4">
                     {searchResult.map(c => (
-                      <ReintegrationCard key={c.id} c={c} onApprove={() => approveReintegration(c.id)} />
+                      <ReintegrationCard key={c.id} c={c} onApprove={() => approveReintegration(c.id)} busy={busy} />
                     ))}
                   </div>
                 )
@@ -274,7 +244,7 @@ export function CommitteeDashboard({ user, cases, setCases, onLogout, onUpdatePr
 function CommitteeCaseDetail({
   c, noteText, setNoteText, onAddNote,
   decision, setDecision, suspStart, setSuspStart, suspEnd, setSuspEnd, onRecordDecision,
-  appealAction, setAppealAction, onResolveAppeal
+  appealAction, setAppealAction, onResolveAppeal, busy, actionError
 }: {
   c: DisciplinaryCase;
   noteText: string; setNoteText: (v: string) => void; onAddNote: () => void;
@@ -284,6 +254,7 @@ function CommitteeCaseDetail({
   onRecordDecision: () => void;
   appealAction: 'Upheld' | 'Overturned' | ''; setAppealAction: (v: 'Upheld' | 'Overturned' | '') => void;
   onResolveAppeal: () => void;
+  busy: boolean; actionError: string;
 }) {
   const needsSuspension = decision === 'Semester Suspension' || decision === 'Expulsion';
   const canDecide = c.status === 'Under Review' || c.status === 'Reported';
@@ -291,6 +262,12 @@ function CommitteeCaseDetail({
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+      {actionError && (
+        <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          <AlertTriangle size={15} className="shrink-0" />
+          <p className="text-sm">{actionError}</p>
+        </div>
+      )}
       {/* Header */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6">
         <div className="flex items-start justify-between mb-4">
@@ -358,7 +335,7 @@ function CommitteeCaseDetail({
             />
             <button
               onClick={onAddNote}
-              disabled={!noteText.trim()}
+              disabled={busy || !noteText.trim()}
               className="flex items-center gap-1.5 bg-[#1D3A5F] hover:bg-[#162d4a] disabled:bg-gray-200 disabled:text-gray-400 text-white px-4 rounded-xl text-sm transition-colors self-end py-2"
             >
               <Send size={13} /> Add
@@ -402,7 +379,7 @@ function CommitteeCaseDetail({
             )}
             <button
               onClick={onRecordDecision}
-              disabled={!decision || (needsSuspension && (!suspStart || !suspEnd))}
+              disabled={busy || !decision || (needsSuspension && (!suspStart || !suspEnd))}
               className="w-full bg-[#1D3A5F] hover:bg-[#162d4a] disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-xl py-2.5 text-sm font-medium transition-colors"
             >
               Record Decision & Notify Student
@@ -430,7 +407,7 @@ function CommitteeCaseDetail({
             </button>
           </div>
           {appealAction && (
-            <button onClick={onResolveAppeal} className="w-full mt-3 bg-purple-700 hover:bg-purple-800 text-white rounded-xl py-2.5 text-sm font-medium transition-colors">
+            <button onClick={onResolveAppeal} disabled={busy} className="w-full mt-3 bg-purple-700 hover:bg-purple-800 disabled:opacity-60 text-white rounded-xl py-2.5 text-sm font-medium transition-colors">
               Confirm Appeal Resolution: {appealAction}
             </button>
           )}
@@ -459,8 +436,8 @@ function CommitteeCaseDetail({
   );
 }
 
-function ReintegrationCard({ c, onApprove }: { c: DisciplinaryCase; onApprove: () => void }) {
-  const today = '2026-06-27';
+function ReintegrationCard({ c, onApprove, busy }: { c: DisciplinaryCase; onApprove: () => void; busy: boolean }) {
+  const today = new Date().toISOString().slice(0, 10);
   const suspensionEnded = c.suspensionEnd ? c.suspensionEnd <= today : false;
   const canReintegrate = c.status === 'Decided' && c.decision === 'Semester Suspension' && suspensionEnded;
   const isResolved = c.status === 'Resolved';
@@ -494,7 +471,7 @@ function ReintegrationCard({ c, onApprove }: { c: DisciplinaryCase; onApprove: (
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-800">
             Suspension period has ended. Student may be cleared to re-register.
           </div>
-          <button onClick={onApprove} className="w-full bg-green-600 hover:bg-green-700 text-white rounded-xl py-2.5 text-sm font-medium transition-colors">
+          <button onClick={onApprove} disabled={busy} className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white rounded-xl py-2.5 text-sm font-medium transition-colors">
             Approve Re-integration & Restore Registration
           </button>
         </div>

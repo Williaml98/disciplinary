@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { FilePlus, List, ChevronRight, Paperclip, AlertCircle } from 'lucide-react';
 import { DashboardLayout, PageHeader, StatusBadge } from './DashboardLayout';
 import type { AppUser, DisciplinaryCase } from './mockData';
+import { reportCase, ApiError } from '../../lib/api';
 
 interface Props {
   user: AppUser;
@@ -38,42 +39,35 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
     evidence: '',
   });
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [selectedCase, setSelectedCase] = useState<DisciplinaryCase | null>(null);
 
   const myCases = cases.filter(c => c.reportedBy === user.name);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const now = new Date();
-    const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const date = timestamp.slice(0, 10);
-    const id = `CF-${now.getFullYear()}-${String(cases.length + 1).padStart(3, '0')}`;
-
-    const newCase: DisciplinaryCase = {
-      id,
-      studentName: form.studentName,
-      studentId: form.studentId,
-      reportedBy: user.name,
-      reporterDepartment: user.department || '',
-      offenseType: form.offenseType,
-      description: form.description,
-      evidence: form.evidence || 'No evidence attached',
-      reportDate: date,
-      status: 'Reported',
-      notes: [],
-      auditTrail: [
-        { action: 'Incident Reported', by: user.name, timestamp },
-        { action: `Case ${id} Created`, by: 'System', timestamp },
-        { action: 'Committee Chair Notified', by: 'System', timestamp },
-      ],
-      appealSubmitted: false,
-      registrationStatus: 'Flagged',
-    };
-
-    setCases(prev => [newCase, ...prev]);
-    setSubmitted(true);
-    setForm({ studentName: '', studentId: '', offenseType: '', description: '', evidence: '' });
-    setTimeout(() => setSubmitted(false), 5000);
+    setSubmitError('');
+    setSubmitting(true);
+    try {
+      const newCase = await reportCase({
+        studentName: form.studentName,
+        studentId: form.studentId,
+        reportedBy: user.name,
+        reporterDepartment: user.department || '',
+        offenseType: form.offenseType,
+        description: form.description,
+        evidence: form.evidence,
+      });
+      setCases(prev => [newCase, ...prev]);
+      setSubmitted(true);
+      setForm({ studentName: '', studentId: '', offenseType: '', description: '', evidence: '' });
+      setTimeout(() => setSubmitted(false), 5000);
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : 'Unable to submit the report. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   const myCaseBadge = myCases.length;
@@ -99,6 +93,12 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
                     <p className="font-medium text-sm">Incident reported successfully</p>
                     <p className="text-xs mt-0.5 text-green-700">The case has been created and the disciplinary committee has been notified.</p>
                   </div>
+                </div>
+              )}
+              {submitError && (
+                <div className="mb-6 bg-red-50 border border-red-200 text-red-800 rounded-xl p-4 flex items-center gap-3">
+                  <AlertCircle size={18} className="text-red-600 shrink-0" />
+                  <p className="text-sm">{submitError}</p>
                 </div>
               )}
               <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
@@ -180,9 +180,10 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
                   </div>
                   <button
                     type="submit"
-                    className="w-full bg-[#1D3A5F] hover:bg-[#162d4a] text-white rounded-xl py-3 text-sm font-medium transition-colors"
+                    disabled={submitting}
+                    className="w-full bg-[#1D3A5F] hover:bg-[#162d4a] disabled:opacity-60 text-white rounded-xl py-3 text-sm font-medium transition-colors"
                   >
-                    Submit Incident Report
+                    {submitting ? 'Submitting…' : 'Submit Incident Report'}
                   </button>
                 </div>
               </form>

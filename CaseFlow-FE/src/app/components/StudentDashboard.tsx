@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Eye, MessageSquare, CheckCircle, Clock, AlertCircle, FileText } from 'lucide-react';
 import { DashboardLayout, PageHeader, StatusBadge } from './DashboardLayout';
 import type { AppUser, DisciplinaryCase, CaseStatus } from './mockData';
+import { submitAppeal as apiSubmitAppeal, ApiError } from '../../lib/api';
 
 interface Props {
   user: AppUser;
@@ -37,6 +38,8 @@ export function StudentDashboard({ user, cases, setCases, onLogout, onUpdateProf
   const [activeNav, setActiveNav] = useState('status');
   const [appealText, setAppealText] = useState('');
   const [appealSubmitted, setAppealSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   const myCase = cases.find(c => c.studentId === user.studentId);
 
@@ -45,29 +48,21 @@ export function StudentDashboard({ user, cases, setCases, onLogout, onUpdateProf
     { id: 'appeal', label: 'Submit Appeal', icon: <MessageSquare size={16} /> },
   ];
 
-  function submitAppeal(e: React.FormEvent) {
+  async function submitAppeal(e: React.FormEvent) {
     e.preventDefault();
     if (!myCase || !appealText.trim()) return;
-    const now = new Date();
-    const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-
-    setCases(prev => prev.map(c => {
-      if (c.id !== myCase.id) return c;
-      return {
-        ...c,
-        status: 'Under Appeal',
-        appealSubmitted: true,
-        appealText,
-        appealStatus: 'Pending',
-        auditTrail: [
-          ...c.auditTrail,
-          { action: 'Appeal Submitted by Student', by: user.name, timestamp },
-          { action: 'Status set to: Under Appeal', by: 'System', timestamp },
-        ],
-      };
-    }));
-    setAppealSubmitted(true);
-    setAppealText('');
+    setSubmitError('');
+    setSubmitting(true);
+    try {
+      const updated = await apiSubmitAppeal(myCase.id, appealText);
+      setCases(prev => prev.map(c => c.id === updated.id ? updated : c));
+      setAppealSubmitted(true);
+      setAppealText('');
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : 'Unable to submit appeal. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -279,12 +274,18 @@ export function StudentDashboard({ user, cases, setCases, onLogout, onUpdateProf
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
                       <p className="text-xs text-amber-800">By submitting, you confirm this is your genuine appeal and that the information provided is truthful.</p>
                     </div>
+                    {submitError && (
+                      <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                        <AlertCircle size={15} className="shrink-0" />
+                        <p className="text-sm">{submitError}</p>
+                      </div>
+                    )}
                     <button
                       type="submit"
-                      disabled={!appealText.trim()}
+                      disabled={submitting || !appealText.trim()}
                       className="w-full bg-[#1D3A5F] hover:bg-[#162d4a] disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-xl py-3 text-sm font-medium transition-colors"
                     >
-                      Submit Appeal
+                      {submitting ? 'Submitting…' : 'Submit Appeal'}
                     </button>
                   </form>
                 </div>
