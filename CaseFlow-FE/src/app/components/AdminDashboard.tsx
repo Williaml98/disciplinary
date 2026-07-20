@@ -26,7 +26,7 @@ const MONTHLY_DATA = [
   { month: 'Jun 26', cases: 5 },
 ];
 
-const PIE_COLORS = ['#0058B8', '#f59e0b', '#f97316', '#a855f7', '#22c55e'];
+const PIE_COLORS = ['#1D3A5F', '#f59e0b', '#f97316', '#a855f7', '#22c55e'];
 
 const ROLE_OPTIONS: { value: Role; label: string; icon: React.ReactNode }[] = [
   { value: 'lecturer', label: 'Lecturer / Invigilator', icon: <BookOpen size={14} /> },
@@ -46,7 +46,7 @@ const ROLE_COLORS: Record<Role, string> = {
   lecturer: 'bg-blue-50 text-blue-700 border-blue-200',
   committee: 'bg-slate-100 text-slate-700 border-slate-200',
   student: 'bg-teal-50 text-teal-700 border-teal-200',
-  admin: 'bg-[#0058B8]/10 text-[#0058B8] border-[#0058B8]/20',
+  admin: 'bg-[#1D3A5F]/10 text-[#1D3A5F] border-[#1D3A5F]/20',
 };
 
 export function AdminDashboard({ user, users, setUsers, cases, onLogout, onUpdateProfile }: Props) {
@@ -117,7 +117,7 @@ export function AdminDashboard({ user, users, setUsers, cases, onLogout, onUpdat
                     <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#9ca3af' }} />
                     <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} allowDecimals={false} />
                     <Tooltip contentStyle={{ borderRadius: '10px', border: '1px solid #e5e7eb', fontSize: '12px' }} />
-                    <Bar dataKey="cases" name="Cases Reported" fill="#0058B8" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="cases" name="Cases Reported" fill="#1D3A5F" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -219,7 +219,7 @@ export function AdminDashboard({ user, users, setUsers, cases, onLogout, onUpdat
                   {['All', 'Reported', 'Under Review', 'Decided', 'Under Appeal', 'Resolved'].map(s => (
                     <button key={s} onClick={() => setStatusFilter(s)}
                       className={`px-2.5 py-1 rounded-lg text-xs transition-colors whitespace-nowrap ${statusFilter === s ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                      style={statusFilter === s ? { backgroundColor: '#0058B8' } : {}}>
+                      style={statusFilter === s ? { backgroundColor: '#1D3A5F' } : {}}>
                       {s}
                     </button>
                   ))}
@@ -245,7 +245,7 @@ export function AdminDashboard({ user, users, setUsers, cases, onLogout, onUpdat
                         <td className="px-6 py-4">{c.decision ? <StatusBadge status={c.decision} /> : <span className="text-gray-300 text-xs">—</span>}</td>
                         <td className="px-6 py-4"><StatusBadge status={c.registrationStatus} /></td>
                         <td className="px-6 py-4">
-                          <button onClick={() => setSelectedCase(c)} className="hover:opacity-70 transition-opacity" style={{ color: '#0058B8' }}>
+                          <button onClick={() => setSelectedCase(c)} className="hover:opacity-70 transition-opacity" style={{ color: '#1D3A5F' }}>
                             <ChevronRight size={16} />
                           </button>
                         </td>
@@ -274,10 +274,10 @@ export function AdminDashboard({ user, users, setUsers, cases, onLogout, onUpdat
               <div className="divide-y divide-gray-100">
                 {cases.flatMap(c => c.auditTrail.map(e => ({ ...e, caseId: c.id }))).sort((a, b) => b.timestamp.localeCompare(a.timestamp)).map((entry, i) => (
                   <div key={i} className="flex items-start gap-4 px-6 py-4 hover:bg-gray-50">
-                    <div className="w-2 h-2 rounded-full mt-2 shrink-0" style={{ backgroundColor: '#0058B8' }} />
+                    <div className="w-2 h-2 rounded-full mt-2 shrink-0" style={{ backgroundColor: '#1D3A5F' }} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ backgroundColor: '#0058B814', color: '#0058B8' }}>{entry.caseId}</span>
+                        <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ backgroundColor: '#1D3A5F14', color: '#1D3A5F' }}>{entry.caseId}</span>
                         <span className="text-sm text-gray-800">{entry.action}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-1">
@@ -377,7 +377,7 @@ function UserManagement({ currentAdmin, users, setUsers }: {
         action={
           <button onClick={() => setShowCreateForm(true)}
             className="flex items-center gap-2 text-white px-4 py-2 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity"
-            style={{ backgroundColor: '#0058B8' }}>
+            style={{ backgroundColor: '#1D3A5F' }}>
             <Plus size={15} /> Create Account
           </button>
         }
@@ -408,7 +408,7 @@ function UserManagement({ currentAdmin, users, setUsers }: {
             {(['all', 'admin', 'committee', 'lecturer', 'student'] as const).map(r => (
               <button key={r} onClick={() => setRoleFilter(r)}
                 className={`px-2.5 py-1 rounded-lg text-xs transition-colors whitespace-nowrap ${roleFilter === r ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                style={roleFilter === r ? { backgroundColor: '#0058B8' } : {}}>
+                style={roleFilter === r ? { backgroundColor: '#1D3A5F' } : {}}>
                 {r === 'all' ? `All (${roleCounts.all})` : r === 'committee' ? `Committee (${roleCounts.committee})` : `${ROLE_LABELS[r]} (${roleCounts[r]})`}
               </button>
             ))}
@@ -429,7 +429,7 @@ function UserManagement({ currentAdmin, users, setUsers }: {
                 <tr key={u.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs shrink-0" style={{ backgroundColor: '#0058B8' }}>
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs shrink-0" style={{ backgroundColor: '#1D3A5F' }}>
                         {u.name.split(' ').map(n => n[0]).slice(0, 2).join('')}
                       </div>
                       <div>
@@ -478,7 +478,7 @@ function UserManagement({ currentAdmin, users, setUsers }: {
                       {u.id !== currentAdmin.id && editingUserId !== u.id && (
                         <>
                           <button onClick={() => setEditingUserId(u.id)} disabled={busyUserId === u.id}
-                            className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#0058B8] disabled:opacity-60 transition-colors">
+                            className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#1D3A5F] disabled:opacity-60 transition-colors">
                             <Pencil size={12} /> Change Role
                           </button>
                           <button onClick={() => deleteUser(u.id)} disabled={busyUserId === u.id}
@@ -571,7 +571,7 @@ function CreateAccountModal({ users, onCreate, onClose }: {
     <div className="fixed inset-0 z-50 flex items-center justify-end">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className="relative w-full max-w-md h-full bg-white shadow-2xl flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200" style={{ backgroundColor: '#0058B8' }}>
+        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200" style={{ backgroundColor: '#1D3A5F' }}>
           <h2 className="text-white font-medium">Create New Account</h2>
           <button onClick={onClose} className="text-white/70 hover:text-white transition-colors"><X size={18} /></button>
         </div>
@@ -594,7 +594,7 @@ function CreateAccountModal({ users, onCreate, onClose }: {
                 {ROLE_OPTIONS.map(opt => (
                   <button key={opt.value} type="button" onClick={() => { set('role', opt.value); set('studentId', ''); set('department', ''); }}
                     className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs transition-all text-left ${
-                      form.role === opt.value ? 'border-[#0058B8] bg-[#0058B8]/5 text-[#0058B8]' : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
+                      form.role === opt.value ? 'border-[#1D3A5F] bg-[#1D3A5F]/5 text-[#1D3A5F]' : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
                     }`}>
                     {opt.icon} {opt.label}
                   </button>
@@ -636,7 +636,7 @@ function CreateAccountModal({ users, onCreate, onClose }: {
             </ModalField>
 
             <div className="pt-2 space-y-2">
-              <button type="submit" disabled={creating} className="w-full text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity" style={{ backgroundColor: '#0058B8' }}>
+              <button type="submit" disabled={creating} className="w-full text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity" style={{ backgroundColor: '#1D3A5F' }}>
                 {creating ? 'Creating Account…' : 'Create Account'}
               </button>
               <button type="button" onClick={onClose} className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl py-2.5 text-sm transition-colors">
@@ -653,7 +653,7 @@ function CreateAccountModal({ users, onCreate, onClose }: {
 /* ── helpers ── */
 function StatCard({ label, value, color, sub }: { label: string; value: string | number; color: string; sub?: string }) {
   const styles: Record<string, { bg: string; text: string }> = {
-    primary: { bg: '#0058B80d', text: '#0058B8' },
+    primary: { bg: '#1D3A5F0d', text: '#1D3A5F' },
     amber: { bg: '#fef3c70d', text: '#b45309' },
     red: { bg: '#fef2f20d', text: '#b91c1c' },
     green: { bg: '#f0fdf40d', text: '#15803d' },
@@ -751,7 +751,7 @@ function AdminCaseDetail({ c }: { c: DisciplinaryCase }) {
           {c.auditTrail.map((entry, i) => (
             <div key={i} className="flex gap-3">
               <div className="flex flex-col items-center">
-                <div className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: '#0058B8' }} />
+                <div className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: '#1D3A5F' }} />
                 {i < c.auditTrail.length - 1 && <div className="w-px flex-1 bg-gray-200 mt-1" />}
               </div>
               <div className="pb-3">
@@ -781,8 +781,8 @@ function inputCls(hasError: boolean) {
 }
 
 function focusStyle(e: React.FocusEvent<HTMLInputElement>) {
-  e.currentTarget.style.boxShadow = '0 0 0 2px #0058B840';
-  e.currentTarget.style.borderColor = '#0058B8';
+  e.currentTarget.style.boxShadow = '0 0 0 2px #1D3A5F40';
+  e.currentTarget.style.borderColor = '#1D3A5F';
 }
 
 function blurStyle(e: React.FocusEvent<HTMLInputElement>) {
@@ -791,8 +791,8 @@ function blurStyle(e: React.FocusEvent<HTMLInputElement>) {
 }
 
 function focusStyleSelect(e: React.FocusEvent<HTMLSelectElement>) {
-  e.currentTarget.style.boxShadow = '0 0 0 2px #0058B840';
-  e.currentTarget.style.borderColor = '#0058B8';
+  e.currentTarget.style.boxShadow = '0 0 0 2px #1D3A5F40';
+  e.currentTarget.style.borderColor = '#1D3A5F';
 }
 
 function blurStyleSelect(e: React.FocusEvent<HTMLSelectElement>) {

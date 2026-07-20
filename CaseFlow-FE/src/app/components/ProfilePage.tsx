@@ -27,7 +27,7 @@ const ROLE_COLORS = {
   lecturer: 'bg-blue-50 text-blue-700 border-blue-200',
   committee: 'bg-slate-100 text-slate-700 border-slate-200',
   student: 'bg-teal-50 text-teal-700 border-teal-200',
-  admin: 'bg-[#0058B8]/10 text-[#0058B8] border-[#0058B8]/20',
+  admin: 'bg-[#1D3A5F]/10 text-[#1D3A5F] border-[#1D3A5F]/20',
 };
 
 export function ProfilePage({ user, onUpdate, onClose }: Props) {
@@ -129,7 +129,7 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
             <div className="relative shrink-0">
               <div
                 className="w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl"
-                style={{ backgroundColor: '#0058B8' }}
+                style={{ backgroundColor: '#1D3A5F' }}
               >
                 {initials}
               </div>
@@ -222,7 +222,7 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
                 type="submit"
                 disabled={savingProfile}
                 className="text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
-                style={{ backgroundColor: '#0058B8' }}
+                style={{ backgroundColor: '#1D3A5F' }}
               >
                 {savingProfile ? 'Saving…' : 'Save Changes'}
               </button>
@@ -303,7 +303,7 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
                 type="submit"
                 disabled={savingPassword}
                 className="text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
-                style={{ backgroundColor: '#0058B8' }}
+                style={{ backgroundColor: '#1D3A5F' }}
               >
                 {savingPassword ? 'Updating…' : 'Update Password'}
               </button>
@@ -355,8 +355,8 @@ function inputCls(hasError: boolean) {
 }
 
 function focusStyle(e: React.FocusEvent<HTMLInputElement>) {
-  e.currentTarget.style.boxShadow = '0 0 0 2px #0058B840';
-  e.currentTarget.style.borderColor = '#0058B8';
+  e.currentTarget.style.boxShadow = '0 0 0 2px #1D3A5F40';
+  e.currentTarget.style.borderColor = '#1D3A5F';
 }
 
 function blurStyle(e: React.FocusEvent<HTMLInputElement>) {

@@ -107,7 +107,7 @@ export function StudentDashboard({ user, cases, setCases, onLogout, onUpdateProf
                       <div className="absolute top-4 left-4 right-4 h-0.5 bg-gray-200 z-0" />
                       <div
                         className="absolute top-4 left-4 h-0.5 z-0 transition-all duration-500"
-                        style={{ width: `${(getStepIndex(myCase.status) / (LIFECYCLE_STEPS.length - 1)) * 100}%`, backgroundColor: '#0058B8' }}
+                        style={{ width: `${(getStepIndex(myCase.status) / (LIFECYCLE_STEPS.length - 1)) * 100}%`, backgroundColor: '#1D3A5F' }}
                       />
                       <div className="relative z-10 flex justify-between">
                         {LIFECYCLE_STEPS.map((step, i) => {
@@ -120,10 +120,10 @@ export function StudentDashboard({ user, cases, setCases, onLogout, onUpdateProf
                                 isDone ? 'text-white' :
                                 isActive ? 'bg-white' :
                                 'bg-white border-gray-300 text-gray-400'
-                              }`} style={isDone ? { backgroundColor: '#0058B8', borderColor: '#0058B8' } : isActive ? { borderColor: '#0058B8', color: '#0058B8' } : {}}>
+                              }`} style={isDone ? { backgroundColor: '#1D3A5F', borderColor: '#1D3A5F' } : isActive ? { borderColor: '#1D3A5F', color: '#1D3A5F' } : {}}>
                                 {isDone ? <CheckCircle size={14} /> : stepIcons[i]}
                               </div>
-                              <p className={`text-xs font-medium text-center leading-tight ${isActive ? 'text-[#0058B8]' : isDone ? 'text-gray-700' : 'text-gray-400'}`}>{step}</p>
+                              <p className={`text-xs font-medium text-center leading-tight ${isActive ? 'text-[#1D3A5F]' : isDone ? 'text-gray-700' : 'text-gray-400'}`}>{step}</p>
                             </div>
                           );
                         })}
@@ -269,7 +269,7 @@ export function StudentDashboard({ user, cases, setCases, onLogout, onUpdateProf
                         value={appealText}
                         onChange={e => setAppealText(e.target.value)}
                         placeholder="Clearly explain the grounds for your appeal. Describe why you believe the decision or sanction is incorrect, and include any relevant information not previously considered by the committee..."
-                        className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0058B8] resize-none"
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3A5F] resize-none"
                       />
                       <p className="text-xs text-gray-400 mt-1">{appealText.length} characters</p>
                     </div>
@@ -285,7 +285,7 @@ export function StudentDashboard({ user, cases, setCases, onLogout, onUpdateProf
                     <button
                       type="submit"
                       disabled={submitting || !appealText.trim()}
-                      className="w-full bg-[#0058B8] hover:bg-[#004590] disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-xl py-3 text-sm font-medium transition-colors"
+                      className="w-full bg-[#1D3A5F] hover:bg-[#162d4a] disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-xl py-3 text-sm font-medium transition-colors"
                     >
                       {submitting ? 'Submitting…' : 'Submit Appeal'}
                     </button>

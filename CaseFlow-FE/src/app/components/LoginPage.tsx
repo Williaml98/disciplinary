@@ -4,7 +4,7 @@ import type { AppUser } from './mockData';
 import { login, register, ApiError } from '../../lib/api';
 import logo from '../../imports/logo.png';
 
-const NAVY = '#0058B8';
+const NAVY = '#1D3A5F';
 const ACCENT = '#9CC7EE';
 
 const LABEL_CLS = 'block text-xs font-semibold tracking-wider text-gray-500 uppercase mb-2';
@@ -166,7 +166,7 @@ function LoginForm({ onLogin, onSwitchToRegister }: {
 
         <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none w-fit">
           <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)}
-            className="w-4 h-4 rounded border-gray-300 accent-[#0058B8]" />
+            className="w-4 h-4 rounded border-gray-300 accent-[#1D3A5F]" />
           Remember me
         </label>
 
@@ -295,7 +295,7 @@ function RegisterForm({ users, onRegister, onSwitchToLogin }: {
   if (success) {
     return (
       <div className="text-center py-16">
-        <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#0058B8' }}>
+        <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#1D3A5F' }}>
           <CheckCircle size={30} className="text-white" />
         </div>
         <h2 className="text-xl text-gray-900 mb-2">Account created!</h2>
@@ -320,13 +320,13 @@ function RegisterForm({ users, onRegister, onSwitchToLogin }: {
           <div key={s} className="flex items-center gap-2 flex-1">
             <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-all ${
               i < stepIndex ? 'text-white' : i === stepIndex ? 'text-white' : 'bg-gray-200 text-gray-400'
-            }`} style={i <= stepIndex ? { backgroundColor: '#0058B8' } : {}}>
+            }`} style={i <= stepIndex ? { backgroundColor: '#1D3A5F' } : {}}>
               {i < stepIndex ? <CheckCircle size={14} /> : i + 1}
             </div>
             <span className={`text-xs hidden sm:block whitespace-nowrap ${i === stepIndex ? 'text-gray-700' : 'text-gray-400'}`}>
               {s === 'details' ? 'Your Details' : s === 'otp' ? 'Verify Email' : 'Set Password'}
             </span>
-            {i < 2 && <div className={`flex-1 h-px ml-1 ${i < stepIndex ? 'bg-[#0058B8]' : 'bg-gray-200'}`} />}
+            {i < 2 && <div className={`flex-1 h-px ml-1 ${i < stepIndex ? 'bg-[#1D3A5F]' : 'bg-gray-200'}`} />}
           </div>
         ))}
       </div>
@@ -334,9 +334,9 @@ function RegisterForm({ users, onRegister, onSwitchToLogin }: {
       {/* ── STEP 1: Details ── */}
       {step === 'details' && (
         <form onSubmit={handleSendOtp} className="space-y-4">
-          <div className="flex items-center gap-2 bg-[#0058B8]/5 border border-[#0058B8]/20 rounded-xl px-4 py-2.5 mb-2">
-            <GraduationCap size={15} className="text-[#0058B8] shrink-0" />
-            <span className="text-sm text-[#0058B8]">Registering as: <strong>Student</strong></span>
+          <div className="flex items-center gap-2 bg-[#1D3A5F]/5 border border-[#1D3A5F]/20 rounded-xl px-4 py-2.5 mb-2">
+            <GraduationCap size={15} className="text-[#1D3A5F] shrink-0" />
+            <span className="text-sm text-[#1D3A5F]">Registering as: <strong>Student</strong></span>
           </div>
 
           <RegField label="Full Name" error={detailErrors.name}>
@@ -361,13 +361,13 @@ function RegisterForm({ users, onRegister, onSwitchToLogin }: {
           </RegField>
 
           <button type="submit" className="w-full flex items-center justify-center gap-2 text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 transition-opacity mt-2"
-            style={{ backgroundColor: '#0058B8' }}>
+            style={{ backgroundColor: '#1D3A5F' }}>
             <Mail size={15} /> Send Verification Code
           </button>
 
           <p className="text-center text-sm text-gray-500 pt-1">
             Already have an account?{' '}
-            <button type="button" onClick={onSwitchToLogin} className="font-medium hover:opacity-80 transition-opacity" style={{ color: '#0058B8' }}>
+            <button type="button" onClick={onSwitchToLogin} className="font-medium hover:opacity-80 transition-opacity" style={{ color: '#1D3A5F' }}>
               Sign in
             </button>
           </p>
@@ -378,7 +378,7 @@ function RegisterForm({ users, onRegister, onSwitchToLogin }: {
       {step === 'otp' && (
         <form onSubmit={handleVerifyOtp} className="space-y-5">
           <div className="text-center mb-2">
-            <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#0058B8' }}>
+            <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#1D3A5F' }}>
               <Mail size={24} className="text-white" />
             </div>
             <p className="text-sm text-gray-700">We sent a 6-digit code to</p>
@@ -409,18 +409,18 @@ function RegisterForm({ users, onRegister, onSwitchToLogin }: {
           </div>
 
           <button type="submit" className="w-full flex items-center justify-center gap-2 text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 transition-opacity"
-            style={{ backgroundColor: '#0058B8' }}>
+            style={{ backgroundColor: '#1D3A5F' }}>
             <ShieldCheck size={15} /> Verify Code
           </button>
 
           {/* Resend */}
           <div className="text-center text-sm text-gray-500">
             {countdown > 0 ? (
-              <span>Resend code in <span className="font-medium" style={{ color: '#0058B8' }}>{countdown}s</span></span>
+              <span>Resend code in <span className="font-medium" style={{ color: '#1D3A5F' }}>{countdown}s</span></span>
             ) : (
               <button type="button" onClick={handleResend}
                 className="flex items-center gap-1.5 mx-auto font-medium hover:opacity-80 transition-opacity"
-                style={{ color: '#0058B8' }}>
+                style={{ color: '#1D3A5F' }}>
                 <RefreshCw size={13} /> Resend OTP
               </button>
             )}
@@ -483,7 +483,7 @@ function RegisterForm({ users, onRegister, onSwitchToLogin }: {
           )}
 
           <button type="submit" disabled={creating} className="w-full text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity mt-2"
-            style={{ backgroundColor: '#0058B8' }}>
+            style={{ backgroundColor: '#1D3A5F' }}>
             {creating ? 'Creating Account…' : 'Create Account'}
           </button>
 
@@ -551,10 +551,10 @@ function OtpBoxes({ value, onChange }: { value: string; onChange: (v: string) =>
           onPaste={handlePaste}
           onFocus={e => e.currentTarget.select()}
           className={`w-10 h-12 sm:w-12 sm:h-14 text-center border-2 rounded-xl text-lg font-mono font-bold focus:outline-none transition-all ${
-            d ? 'border-[#0058B8] bg-[#0058B8]/5 text-[#0058B8]' : 'border-gray-300 text-gray-700'
+            d ? 'border-[#1D3A5F] bg-[#1D3A5F]/5 text-[#1D3A5F]' : 'border-gray-300 text-gray-700'
           }`}
           style={{ boxShadow: d ? '0 0 0 0px transparent' : undefined }}
-          onFocusCapture={e => { e.currentTarget.style.borderColor = '#0058B8'; e.currentTarget.style.boxShadow = '0 0 0 2px #0058B830'; }}
+          onFocusCapture={e => { e.currentTarget.style.borderColor = '#1D3A5F'; e.currentTarget.style.boxShadow = '0 0 0 2px #1D3A5F30'; }}
           onBlurCapture={e => { if (!e.currentTarget.value) { e.currentTarget.style.borderColor = ''; e.currentTarget.style.boxShadow = ''; } }}
         />
       ))}
@@ -582,8 +582,8 @@ function inputCls(hasError: boolean) {
 }
 
 function focusStyle(e: React.FocusEvent<HTMLInputElement>) {
-  e.currentTarget.style.boxShadow = '0 0 0 2px #0058B840';
-  e.currentTarget.style.borderColor = '#0058B8';
+  e.currentTarget.style.boxShadow = '0 0 0 2px #1D3A5F40';
+  e.currentTarget.style.borderColor = '#1D3A5F';
 }
 
 function blurStyle(e: React.FocusEvent<HTMLInputElement>) {

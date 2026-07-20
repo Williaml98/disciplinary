@@ -149,7 +149,7 @@ export function DashboardLayout({ user, onLogout, onUpdateProfile, navItems, act
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
           lg:relative lg:translate-x-0 lg:transition-none lg:z-auto
         `}
-        style={{ backgroundColor: '#0058B8' }}
+        style={{ backgroundColor: '#1D3A5F' }}
       >
         {sidebarContent}
       </aside>
@@ -159,7 +159,7 @@ export function DashboardLayout({ user, onLogout, onUpdateProfile, navItems, act
         {/* Mobile top bar */}
         <div
           className="lg:hidden flex items-center justify-between px-4 py-3 text-white shrink-0"
-          style={{ backgroundColor: '#0058B8' }}
+          style={{ backgroundColor: '#1D3A5F' }}
         >
           <div className="flex items-center gap-2.5">
             <img src={logo} alt="AUCA Logo" className="w-7 h-7 rounded-full bg-white p-0.5 object-cover" />
@@ -212,7 +212,7 @@ export function EvidenceGallery({ files }: { files: string[] }) {
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="block w-20 h-20 rounded-lg overflow-hidden border border-gray-200 hover:border-[#0058B8]/40 transition-colors shrink-0"
+          className="block w-20 h-20 rounded-lg overflow-hidden border border-gray-200 hover:border-[#1D3A5F]/40 transition-colors shrink-0"
         >
           <img src={url} alt={`Evidence ${i + 1}`} className="w-full h-full object-cover" />
         </a>

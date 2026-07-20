@@ -155,7 +155,7 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
                         value={form.studentName}
                         onChange={e => setForm(f => ({ ...f, studentName: e.target.value }))}
                         placeholder="e.g. Jean Bosco Habimana"
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0058B8] focus:border-transparent"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3A5F] focus:border-transparent"
                       />
                     </div>
                     <div>
@@ -166,7 +166,7 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
                         value={form.studentId}
                         onChange={e => setForm(f => ({ ...f, studentId: e.target.value }))}
                         placeholder="e.g. 21045"
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0058B8] focus:border-transparent"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3A5F] focus:border-transparent"
                       />
                     </div>
                   </div>
@@ -181,7 +181,7 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
                         required
                         value={form.offenseType}
                         onChange={e => setForm(f => ({ ...f, offenseType: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0058B8] focus:border-transparent bg-white"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3A5F] focus:border-transparent bg-white"
                       >
                         <option value="">Select offense type...</option>
                         {OFFENSE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
@@ -195,7 +195,7 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
                         value={form.description}
                         onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                         placeholder="Provide a detailed description of the incident, including date, time, location, and what occurred..."
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0058B8] focus:border-transparent resize-none"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3A5F] focus:border-transparent resize-none"
                       />
                     </div>
                     <div>
@@ -207,7 +207,7 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
                         value={form.evidence}
                         onChange={e => setForm(f => ({ ...f, evidence: e.target.value }))}
                         placeholder="Describe any physical or digital evidence (e.g. confiscated notes, screenshots, witness statements)..."
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0058B8] focus:border-transparent resize-none"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3A5F] focus:border-transparent resize-none"
                       />
                       <p className="text-xs text-gray-400 mt-1">Physical evidence should be submitted to the Student Affairs office with case reference number.</p>
                     </div>
@@ -226,7 +226,7 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
-                        className="w-full flex items-center justify-center gap-2 border border-dashed border-gray-300 rounded-lg py-3 text-sm text-gray-500 hover:border-[#0058B8]/40 hover:text-[#0058B8] transition-colors"
+                        className="w-full flex items-center justify-center gap-2 border border-dashed border-gray-300 rounded-lg py-3 text-sm text-gray-500 hover:border-[#1D3A5F]/40 hover:text-[#1D3A5F] transition-colors"
                       >
                         <ImagePlus size={15} /> Upload one or more photos
                       </button>
@@ -259,7 +259,7 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full bg-[#0058B8] hover:bg-[#004590] disabled:opacity-60 text-white rounded-xl py-3 text-sm font-medium transition-colors"
+                    className="w-full bg-[#1D3A5F] hover:bg-[#162d4a] disabled:opacity-60 text-white rounded-xl py-3 text-sm font-medium transition-colors"
                   >
                     {submitting ? 'Submitting…' : 'Submit Incident Report'}
                   </button>
@@ -300,7 +300,7 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
                     <button
                       key={c.id}
                       onClick={() => setSelectedCase(c)}
-                      className="w-full bg-white border border-gray-200 rounded-2xl p-5 text-left hover:border-[#0058B8]/40 hover:shadow-sm transition-all group"
+                      className="w-full bg-white border border-gray-200 rounded-2xl p-5 text-left hover:border-[#1D3A5F]/40 hover:shadow-sm transition-all group"
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
@@ -311,7 +311,7 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
                           <p className="text-sm text-gray-900">{c.studentName} — <span className="text-gray-500">{c.offenseType}</span></p>
                           <p className="text-xs text-gray-400 mt-1">Reported {c.reportDate}</p>
                         </div>
-                        <ChevronRight size={16} className="text-gray-400 group-hover:text-[#0058B8] transition-colors mt-1 shrink-0" />
+                        <ChevronRight size={16} className="text-gray-400 group-hover:text-[#1D3A5F] transition-colors mt-1 shrink-0" />
                       </div>
                     </button>
                   ))}
@@ -361,7 +361,7 @@ function CaseDetailReadOnly({ c }: { c: DisciplinaryCase }) {
           {c.auditTrail.map((entry, i) => (
             <div key={i} className="flex gap-3">
               <div className="flex flex-col items-center">
-                <div className="w-2 h-2 rounded-full bg-[#0058B8] mt-1.5 shrink-0" />
+                <div className="w-2 h-2 rounded-full bg-[#1D3A5F] mt-1.5 shrink-0" />
                 {i < c.auditTrail.length - 1 && <div className="w-px flex-1 bg-gray-200 mt-1" />}
               </div>
               <div className="pb-3 min-w-0">

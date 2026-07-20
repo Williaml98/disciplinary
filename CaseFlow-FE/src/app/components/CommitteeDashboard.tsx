@@ -137,7 +137,7 @@ export function CommitteeDashboard({ user, cases, setCases, onLogout, onUpdatePr
                 <button
                   key={c.id}
                   onClick={() => setSelectedCase(c)}
-                  className={`w-full p-4 text-left border-b border-gray-100 hover:bg-gray-50 transition-colors ${selectedCase?.id === c.id ? 'bg-blue-50 border-l-2 border-l-[#0058B8]' : ''}`}
+                  className={`w-full p-4 text-left border-b border-gray-100 hover:bg-gray-50 transition-colors ${selectedCase?.id === c.id ? 'bg-blue-50 border-l-2 border-l-[#1D3A5F]' : ''}`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
@@ -214,9 +214,9 @@ export function CommitteeDashboard({ user, cases, setCases, onLogout, onUpdatePr
                     onChange={e => setSearchId(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleSearch()}
                     placeholder="Student ID or name..."
-                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0058B8]"
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3A5F]"
                   />
-                  <button onClick={handleSearch} className="flex items-center gap-2 bg-[#0058B8] hover:bg-[#004590] text-white px-4 py-2 rounded-lg text-sm transition-colors">
+                  <button onClick={handleSearch} className="flex items-center gap-2 bg-[#1D3A5F] hover:bg-[#162d4a] text-white px-4 py-2 rounded-lg text-sm transition-colors">
                     <Search size={14} /> Search
                   </button>
                 </div>
@@ -336,12 +336,12 @@ function CommitteeCaseDetail({
               value={noteText}
               onChange={e => setNoteText(e.target.value)}
               placeholder="Add a deliberation note..."
-              className="flex-1 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0058B8] resize-none"
+              className="flex-1 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3A5F] resize-none"
             />
             <button
               onClick={onAddNote}
               disabled={busy || !noteText.trim()}
-              className="flex items-center gap-1.5 bg-[#0058B8] hover:bg-[#004590] disabled:bg-gray-200 disabled:text-gray-400 text-white px-4 rounded-xl text-sm transition-colors self-end py-2"
+              className="flex items-center gap-1.5 bg-[#1D3A5F] hover:bg-[#162d4a] disabled:bg-gray-200 disabled:text-gray-400 text-white px-4 rounded-xl text-sm transition-colors self-end py-2"
             >
               <Send size={13} /> Add
             </button>
@@ -362,7 +362,7 @@ function CommitteeCaseDetail({
                     key={d}
                     onClick={() => setDecision(d)}
                     className={`py-2 px-3 rounded-xl border text-sm transition-all ${
-                      decision === d ? 'border-[#0058B8] bg-[#0058B8]/5 text-[#0058B8]' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                      decision === d ? 'border-[#1D3A5F] bg-[#1D3A5F]/5 text-[#1D3A5F]' : 'border-gray-200 text-gray-600 hover:border-gray-300'
                     }`}
                   >
                     {d}
@@ -385,7 +385,7 @@ function CommitteeCaseDetail({
             <button
               onClick={onRecordDecision}
               disabled={busy || !decision || (needsSuspension && (!suspStart || !suspEnd))}
-              className="w-full bg-[#0058B8] hover:bg-[#004590] disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-xl py-2.5 text-sm font-medium transition-colors"
+              className="w-full bg-[#1D3A5F] hover:bg-[#162d4a] disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-xl py-2.5 text-sm font-medium transition-colors"
             >
               Record Decision & Notify Student
             </button>
@@ -426,7 +426,7 @@ function CommitteeCaseDetail({
           {c.auditTrail.map((entry, i) => (
             <div key={i} className="flex gap-3">
               <div className="flex flex-col items-center">
-                <div className="w-2 h-2 rounded-full bg-[#0058B8]/60 mt-1.5 shrink-0" />
+                <div className="w-2 h-2 rounded-full bg-[#1D3A5F]/60 mt-1.5 shrink-0" />
                 {i < c.auditTrail.length - 1 && <div className="w-px flex-1 bg-gray-200 mt-1" />}
               </div>
               <div className="pb-3 min-w-0">
