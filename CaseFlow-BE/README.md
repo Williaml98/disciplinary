@@ -50,6 +50,8 @@ Config is read from environment variables (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERN
 | `GET /api/cases` | List all cases |
 | `GET /api/cases/{id}` | Get one case |
 | `POST /api/cases` | Report a new incident (lecturer flow) |
+| `POST /api/cases/{id}/evidence` | Upload one or more evidence photos (`multipart/form-data`, field `files`; JPEG/PNG/GIF/WEBP only, 8MB/file) |
+| `GET /api/cases/{id}/evidence/{filename}` | Fetch a stored evidence photo |
 | `POST /api/cases/{id}/status` | Update case status directly |
 | `POST /api/cases/{id}/notes` | Add a committee deliberation note (auto-transitions `Reported` → `Under Review`) |
 | `POST /api/cases/{id}/decision` | Record a committee decision (sets `registrationStatus` to `Restricted` for suspension/expulsion, `Active` otherwise) |
@@ -65,4 +67,5 @@ Passwords are hashed with BCrypt (`spring-security-crypto`); there's no session/
 - `repository/` — Spring Data JPA repositories.
 - `web/` — REST controllers (`AuthController`, `UserController`, `CaseController`) and their request/response DTOs under `web/dto/`.
 - `email/EmailService.java` — thin wrapper over `JavaMailSender`; swallows and logs send failures rather than throwing, so a broken SMTP config never breaks the underlying case/user action.
+- `storage/EvidenceStorage.java` — stores uploaded evidence photos on the local filesystem under `caseflow.uploads.dir` (default `./uploads/{caseId}/{uuid}.{ext}`, gitignored). Filenames are always server-generated from a UUID plus an extension derived from the validated content type — neither upload nor download ever trusts a client-supplied filename or path segment.
 - `docker-compose.yml` — Postgres + Mailpit services used for local dev; not used by tests.

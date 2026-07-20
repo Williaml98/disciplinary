@@ -5,14 +5,20 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Year;
 import java.util.List;
+import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.MediaTypeFactory;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 import rw.ac.auca.caseflow.domain.AppealStatus;
 import rw.ac.auca.caseflow.domain.AuditEntry;
@@ -24,6 +30,7 @@ import rw.ac.auca.caseflow.domain.RegistrationStatus;
 import rw.ac.auca.caseflow.email.EmailService;
 import rw.ac.auca.caseflow.repository.CaseRepository;
 import rw.ac.auca.caseflow.repository.UserRepository;
+import rw.ac.auca.caseflow.storage.EvidenceStorage;
 import rw.ac.auca.caseflow.web.dto.AppealRequest;
 import rw.ac.auca.caseflow.web.dto.AppealResolutionRequest;
 import rw.ac.auca.caseflow.web.dto.CaseResponse;
@@ -40,11 +47,14 @@ public class CaseController {
     private final CaseRepository caseRepository;
     private final UserRepository userRepository;
     private final EmailService emailService;
+    private final EvidenceStorage evidenceStorage;
 
-    public CaseController(CaseRepository caseRepository, UserRepository userRepository, EmailService emailService) {
+    public CaseController(CaseRepository caseRepository, UserRepository userRepository, EmailService emailService,
+                           EvidenceStorage evidenceStorage) {
         this.caseRepository = caseRepository;
         this.userRepository = userRepository;
         this.emailService = emailService;
+        this.evidenceStorage = evidenceStorage;
     }
 
     @GetMapping
@@ -81,6 +91,27 @@ public class CaseController {
         disciplinaryCase.addAuditEntry(new AuditEntry("Committee Chair Notified", "System", now));
 
         return CaseResponse.from(caseRepository.save(disciplinaryCase));
+    }
+
+    @PostMapping("/{id}/evidence")
+    public CaseResponse uploadEvidence(@PathVariable String id,
+                                        @RequestParam("files") List<MultipartFile> files,
+                                        @RequestParam(value = "by", required = false) String by) {
+        DisciplinaryCase disciplinaryCase = findOrThrow(id);
+        for (MultipartFile file : files) {
+            disciplinaryCase.addEvidenceFile(evidenceStorage.store(id, file));
+        }
+        disciplinaryCase.addAuditEntry(new AuditEntry(
+                "Evidence Uploaded (" + files.size() + " file" + (files.size() == 1 ? "" : "s") + ")",
+                actorOrSystem(by), Instant.now()));
+        return CaseResponse.from(caseRepository.save(disciplinaryCase));
+    }
+
+    @GetMapping("/{id}/evidence/{filename}")
+    public ResponseEntity<Resource> getEvidenceFile(@PathVariable String id, @PathVariable String filename) {
+        Resource resource = evidenceStorage.load(id, filename);
+        MediaType contentType = MediaTypeFactory.getMediaType(resource).orElse(MediaType.APPLICATION_OCTET_STREAM);
+        return ResponseEntity.ok().contentType(contentType).body(resource);
     }
 
     @PostMapping("/{id}/status")

@@ -13,10 +13,16 @@ spring:
   mail:
     host: localhost
     port: 1025
+  servlet:
+    multipart:
+      max-file-size: 8MB
+      max-request-size: 40MB
 
 caseflow:
   mail:
     from: noreply@auca.ac.rw
+  uploads:
+    dir: build/test-uploads
 
 server:
   error:

@@ -28,7 +28,8 @@ public record CaseResponse(
         AppealStatus appealStatus,
         RegistrationStatus registrationStatus,
         List<NoteResponse> notes,
-        List<AuditEntryResponse> auditTrail
+        List<AuditEntryResponse> auditTrail,
+        List<String> evidenceFiles
 ) {
     public static CaseResponse from(DisciplinaryCase c) {
         return new CaseResponse(
@@ -51,7 +52,8 @@ public record CaseResponse(
                 c.getAppealStatus(),
                 c.getRegistrationStatus(),
                 c.getNotes().stream().map(NoteResponse::from).toList(),
-                c.getAuditTrail().stream().map(AuditEntryResponse::from).toList()
+                c.getAuditTrail().stream().map(AuditEntryResponse::from).toList(),
+                c.getEvidenceFiles().stream().map(f -> "/cases/" + c.getId() + "/evidence/" + f).toList()
         );
     }
 }

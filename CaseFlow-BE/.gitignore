@@ -3,6 +3,9 @@ target/
 # Env
 .env
 
+# Uploaded evidence files (local dev storage, never committed)
+uploads/
+
 # Editor / OS
 .DS_Store
 .idea

@@ -1,7 +1,9 @@
 package rw.ac.auca.caseflow.domain;
 
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -9,7 +11,9 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
@@ -81,6 +85,14 @@ public class DisciplinaryCase {
     @OneToMany(mappedBy = "disciplinaryCase", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @OrderBy("timestamp asc")
     private List<AuditEntry> auditTrail = new ArrayList<>();
+
+    // EAGER for the same reason as notes/auditTrail above: open-in-view is disabled and
+    // CaseResponse serializes this outside any transaction.
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "case_evidence_files", joinColumns = @JoinColumn(name = "case_id"))
+    @OrderColumn(name = "position")
+    @Column(name = "filename")
+    private List<String> evidenceFiles = new ArrayList<>();
 
     protected DisciplinaryCase() {
     }
@@ -216,5 +228,13 @@ public class DisciplinaryCase {
 
     public List<AuditEntry> getAuditTrail() {
         return auditTrail;
+    }
+
+    public List<String> getEvidenceFiles() {
+        return evidenceFiles;
+    }
+
+    public void addEvidenceFile(String filename) {
+        evidenceFiles.add(filename);
     }
 }
