@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Start `CaseFlow-BE` first (`../CaseFlow-BE && ./mvnw spring-boot:run`, listening on http://localhost:8080). Then open http://localhost:5173. Demo accounts (password `demo1234` for all) are listed on the login screen — one per role: lecturer, committee member, student, admin.
+Start `CaseFlow-BE` first (`../CaseFlow-BE && ./mvnw spring-boot:run`, listening on http://localhost:8080). Then open http://localhost:5173. There's no seed/demo data and no quick-login shortcuts — on a fresh database, register a student via "Create a student account" on the login screen, or create the first staff account directly against the API (`POST http://localhost:8080/api/users`), since there's no login-gated admin bootstrap yet.
 
 ## Scripts
 
@@ -32,5 +32,5 @@ Copy `.env.example` to `.env` if `CaseFlow-BE` isn't running on the default `htt
 - **No router** — [`src/app/App.tsx`](src/app/App.tsx) fetches `users`/`cases` from the API on mount into React state, then switches on `currentUser.role` to render one of four dashboards: `LecturerDashboard`, `CommitteeDashboard`, `StudentDashboard`, `AdminDashboard`.
 - **API client** — [`src/lib/api.ts`](src/lib/api.ts) wraps every `CaseFlow-BE` endpoint, mapping its wire format (numeric user IDs, ISO timestamps, `UNDER_REVIEW`-style enums) to the shapes this app already used with mock data (string IDs, `"YYYY-MM-DD HH:MM"` timestamps, `"Under Review"`-style strings) — no component needed to change its rendering logic.
 - **Shared chrome** — [`src/app/components/DashboardLayout.tsx`](src/app/components/DashboardLayout.tsx) provides the sidebar, `PageHeader`, and `StatusBadge` used across all four dashboards.
-- **Data model** — [`src/app/components/mockData.tsx`](src/app/components/mockData.tsx) defines `DisciplinaryCase` (with its status/appeal/decision lifecycle) and `AppUser` — despite the filename, it's type definitions only now; the seed data lives in `CaseFlow-BE`'s `DataSeeder`.
+- **Data model** — [`src/app/components/mockData.tsx`](src/app/components/mockData.tsx) defines `DisciplinaryCase` (with its status/appeal/decision lifecycle) and `AppUser` — despite the filename, it's type definitions only; there is no mock/seed data anywhere in this project, on either the FE or `CaseFlow-BE`.
 - **UI primitives** — [`src/app/components/ui/`](src/app/components/ui/) is a vendored shadcn/ui (Radix + Tailwind) component set; treat it as library code.

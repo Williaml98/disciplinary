@@ -1,30 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
-import { Eye, EyeOff, AlertCircle, CheckCircle, Zap, GraduationCap, Users, BookOpen, Settings, ArrowLeft, Mail, RefreshCw, ShieldCheck } from 'lucide-react';
-import type { AppUser, Role } from './mockData';
+import { Eye, EyeOff, AlertCircle, CheckCircle, Zap, GraduationCap, ArrowLeft, Mail, RefreshCw, ShieldCheck } from 'lucide-react';
+import type { AppUser } from './mockData';
 import { login, register, ApiError } from '../../lib/api';
 import logo from '../../imports/logo.png';
-
-const DEMO_PASSWORD = 'demo1234';
 
 interface LoginPageProps {
   users: AppUser[];
   onLogin: (user: AppUser) => void;
   onRegister: (user: AppUser) => void;
 }
-
-const ROLE_ICONS: Record<Role, React.ReactNode> = {
-  lecturer: <BookOpen size={13} />,
-  committee: <Users size={13} />,
-  student: <GraduationCap size={13} />,
-  admin: <Settings size={13} />,
-};
-
-const ROLE_LABELS: Record<Role, string> = {
-  lecturer: 'Lecturer / Invigilator',
-  committee: 'Committee Member',
-  student: 'Student',
-  admin: 'Registrar / Admin',
-};
 
 function maskEmail(email: string): string {
   const [local, domain] = email.split('@');
@@ -80,7 +64,7 @@ export function LoginPage({ users, onLogin, onRegister }: LoginPageProps) {
         <div className="flex-1 flex items-start sm:items-center justify-center p-5 sm:p-8 py-8">
           <div className="w-full max-w-md">
             {view === 'login' ? (
-              <LoginForm users={users} onLogin={onLogin} onSwitchToRegister={() => setView('register')} />
+              <LoginForm onLogin={onLogin} onSwitchToRegister={() => setView('register')} />
             ) : (
               <RegisterForm users={users} onRegister={onRegister} onSwitchToLogin={() => setView('login')} />
             )}
@@ -94,8 +78,7 @@ export function LoginPage({ users, onLogin, onRegister }: LoginPageProps) {
 /* ─────────────────────────────────────────
    LOGIN FORM
 ───────────────────────────────────────── */
-function LoginForm({ users, onLogin, onSwitchToRegister }: {
-  users: AppUser[];
+function LoginForm({ onLogin, onSwitchToRegister }: {
   onLogin: (user: AppUser) => void;
   onSwitchToRegister: () => void;
 }) {
@@ -112,19 +95,6 @@ function LoginForm({ users, onLogin, onSwitchToRegister }: {
     try {
       const user = await login(email.trim(), password);
       onLogin(user);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Unable to sign in. Please try again.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleDemoLogin(user: AppUser) {
-    setError('');
-    setBusy(true);
-    try {
-      const loggedIn = await login(user.email, DEMO_PASSWORD);
-      onLogin(loggedIn);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Unable to sign in. Please try again.');
     } finally {
@@ -182,35 +152,6 @@ function LoginForm({ users, onLogin, onSwitchToRegister }: {
           Create a student account
         </button>
       </p>
-
-      {/* Demo accounts */}
-      <div className="border-t border-gray-200 pt-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Zap size={13} className="text-amber-500" />
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Demo Accounts</p>
-          <span className="text-xs text-gray-400">· password: demo1234</span>
-        </div>
-        <div className="space-y-2">
-          {users.map(user => (
-            <button key={user.id} disabled={busy} onClick={() => handleDemoLogin(user)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 disabled:opacity-60 transition-all text-left">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs shrink-0" style={{ backgroundColor: '#1D3A5F' }}>
-                  {user.name.split(' ').map(n => n[0]).slice(0, 2).join('')}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm text-gray-800 truncate">{user.name}</p>
-                  <p className="text-xs text-gray-400 truncate">{user.email}</p>
-                </div>
-              </div>
-              <span className="flex items-center gap-1 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full shrink-0 whitespace-nowrap ml-2">
-                {ROLE_ICONS[user.role]}
-                <span className="hidden sm:inline">{ROLE_LABELS[user.role]}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
