@@ -7,6 +7,8 @@ import { AdminDashboard } from './components/AdminDashboard';
 import type { AppUser, DisciplinaryCase } from './components/mockData';
 import { fetchUsers, fetchCases, ApiError } from '../lib/api';
 
+const REMEMBERED_USER_KEY = 'caseflow.rememberedUserId';
+
 export default function App() {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
@@ -25,6 +27,13 @@ export default function App() {
       const [fetchedUsers, fetchedCases] = await Promise.all([fetchUsers(), fetchCases()]);
       setUsers(fetchedUsers);
       setCases(fetchedCases);
+
+      const rememberedId = localStorage.getItem(REMEMBERED_USER_KEY);
+      if (rememberedId) {
+        const remembered = fetchedUsers.find(u => u.id === rememberedId);
+        if (remembered) setCurrentUser(remembered);
+        else localStorage.removeItem(REMEMBERED_USER_KEY);
+      }
     } catch (err) {
       setLoadError(
         err instanceof ApiError ? err.message : 'Could not reach the CaseFlow server. Is the backend running?'
@@ -32,6 +41,17 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleLogin(user: AppUser, remember?: boolean) {
+    setCurrentUser(user);
+    if (remember) localStorage.setItem(REMEMBERED_USER_KEY, user.id);
+    else localStorage.removeItem(REMEMBERED_USER_KEY);
+  }
+
+  function handleLogout() {
+    setCurrentUser(null);
+    localStorage.removeItem(REMEMBERED_USER_KEY);
   }
 
   function handleRegister(newUser: AppUser) {
@@ -73,7 +93,7 @@ export default function App() {
     return (
       <LoginPage
         users={users}
-        onLogin={setCurrentUser}
+        onLogin={handleLogin}
         onRegister={handleRegister}
       />
     );
@@ -82,7 +102,7 @@ export default function App() {
   const sharedProps = {
     cases,
     setCases,
-    onLogout: () => setCurrentUser(null),
+    onLogout: handleLogout,
     onUpdateProfile: handleUpdateProfile,
   };
 
@@ -96,6 +116,6 @@ export default function App() {
     case 'admin':
       return <AdminDashboard {...sharedProps} user={currentUser} users={users} setUsers={setUsers} />;
     default:
-      return <LoginPage users={users} onLogin={setCurrentUser} onRegister={handleRegister} />;
+      return <LoginPage users={users} onLogin={handleLogin} onRegister={handleRegister} />;
   }
 }

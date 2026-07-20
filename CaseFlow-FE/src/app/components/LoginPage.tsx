@@ -1,12 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
-import { Eye, EyeOff, AlertCircle, CheckCircle, Zap, GraduationCap, ArrowLeft, Mail, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, CheckCircle, Check, Lock, Zap, GraduationCap, ArrowLeft, Mail, RefreshCw, ShieldCheck } from 'lucide-react';
 import type { AppUser } from './mockData';
 import { login, register, ApiError } from '../../lib/api';
 import logo from '../../imports/logo.png';
 
+const NAVY = '#1D3A5F';
+const GOLD = '#C9A24B';
+
+const LABEL_CLS = 'block text-xs font-semibold tracking-wider text-gray-500 uppercase mb-2';
+
 interface LoginPageProps {
   users: AppUser[];
-  onLogin: (user: AppUser) => void;
+  onLogin: (user: AppUser, remember?: boolean) => void;
   onRegister: (user: AppUser) => void;
 }
 
@@ -22,52 +27,74 @@ export function LoginPage({ users, onLogin, onRegister }: LoginPageProps) {
   const [view, setView] = useState<'login' | 'register'>('login');
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left branding panel */}
-      <div className="hidden lg:flex lg:w-5/12 flex-col justify-between p-10 text-white" style={{ backgroundColor: '#1D3A5F' }}>
-        <div>
-          <div className="flex items-center gap-3 mb-12">
-            <img src={logo} alt="AUCA Logo" className="w-12 h-12 rounded-full bg-white p-0.5 object-cover" />
-            <div>
-              <p className="font-bold text-lg leading-tight">CaseFlow</p>
-              <p className="text-white/50 text-xs">AUCA</p>
-            </div>
-          </div>
-          <h2 className="text-3xl leading-snug mb-4">Student Disciplinary Case Management System</h2>
-          <p className="text-white/60 text-sm leading-relaxed">
-            A secure, transparent platform for managing the full lifecycle of student disciplinary cases — from incident reporting through committee review, decision, and re-integration.
-          </p>
-        </div>
-        <div className="space-y-3">
-          {[
-            'Digital incident reporting with evidence tracking',
-            'Online committee review and deliberation workspace',
-            'Real-time case status visibility for students',
-            'Automated registration enforcement and alerts',
-            'Verifiable re-integration records',
-          ].map((f, i) => (
-            <div key={i} className="flex items-start gap-2.5">
-              <CheckCircle size={14} className="text-white/50 mt-0.5 shrink-0" />
-              <span className="text-white/60 text-sm">{f}</span>
-            </div>
-          ))}
-          <p className="text-white/30 text-xs pt-4">Adventist University of Central Africa · Rwanda</p>
-        </div>
-      </div>
+    <div className="min-h-screen w-full flex items-center justify-center p-4 sm:p-8"
+      style={{ background: 'linear-gradient(135deg, #f7f3ea 0%, #f0ead9 50%, #e9e0c9 100%)' }}>
+      <div className="w-full max-w-5xl bg-white rounded-3xl shadow-2xl overflow-hidden grid lg:grid-cols-2">
+        {/* Left branding panel */}
+        <div className="hidden lg:flex flex-col justify-between p-10 text-white relative overflow-hidden" style={{ backgroundColor: NAVY }}>
+          <div className="absolute inset-0 opacity-[0.07] pointer-events-none" style={{
+            backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)',
+            backgroundSize: '28px 28px',
+          }} />
+          <div className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full border border-white/10" />
+          <div className="absolute -bottom-10 -right-10 w-44 h-44 rounded-full border border-white/10" />
 
-      {/* Right form panel */}
-      <div className="flex-1 flex flex-col overflow-y-auto bg-gray-50">
-        <div className="lg:hidden flex items-center gap-3 p-6 pb-0" style={{ color: '#1D3A5F' }}>
-          <img src={logo} alt="AUCA Logo" className="w-9 h-9 rounded-full bg-white border border-gray-200 object-cover" />
-          <span className="font-bold text-base">CaseFlow</span>
+          <div className="relative">
+            <div className="flex items-center gap-3 mb-14">
+              <img src={logo} alt="AUCA Logo" className="w-12 h-12 rounded-full bg-white p-0.5 object-cover" />
+              <div>
+                <p className="font-bold text-lg leading-tight">CaseFlow</p>
+                <p className="text-white/50 text-xs">AUCA</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 mb-5">
+              <span className="w-4 h-px" style={{ backgroundColor: GOLD }} />
+              <p className="text-xs font-semibold tracking-widest uppercase" style={{ color: GOLD }}>Student Disciplinary Platform</p>
+            </div>
+
+            <h2 className="font-serif text-4xl leading-tight mb-5">
+              Manage every case.{' '}
+              <span style={{ color: GOLD }}>Protect every outcome.</span>
+            </h2>
+            <p className="text-white/60 text-sm leading-relaxed">
+              A secure, transparent platform for managing the full lifecycle of student disciplinary cases — from incident reporting through committee review, decision, and re-integration.
+            </p>
+          </div>
+
+          <div className="relative space-y-3">
+            {[
+              'Digital incident reporting with evidence tracking',
+              'Online committee review and deliberation workspace',
+              'Real-time case status visibility for students',
+              'Automated registration enforcement and alerts',
+              'Verifiable re-integration records',
+            ].map((f, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <span className="w-5 h-5 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: `${GOLD}26`, border: `1px solid ${GOLD}66` }}>
+                  <Check size={11} style={{ color: GOLD }} />
+                </span>
+                <span className="text-white/60 text-sm">{f}</span>
+              </div>
+            ))}
+            <p className="text-white/30 text-xs pt-4">© 2026 CaseFlow · Adventist University of Central Africa, Rwanda</p>
+          </div>
         </div>
-        <div className="flex-1 flex items-start sm:items-center justify-center p-5 sm:p-8 py-8">
-          <div className="w-full max-w-md">
-            {view === 'login' ? (
-              <LoginForm onLogin={onLogin} onSwitchToRegister={() => setView('register')} />
-            ) : (
-              <RegisterForm users={users} onRegister={onRegister} onSwitchToLogin={() => setView('login')} />
-            )}
+
+        {/* Right form panel */}
+        <div className="flex flex-col overflow-y-auto bg-white">
+          <div className="lg:hidden flex items-center gap-3 p-6 pb-0" style={{ color: NAVY }}>
+            <img src={logo} alt="AUCA Logo" className="w-9 h-9 rounded-full bg-white border border-gray-200 object-cover" />
+            <span className="font-bold text-base">CaseFlow</span>
+          </div>
+          <div className="flex-1 flex items-start sm:items-center justify-center p-6 sm:p-10 py-8">
+            <div className="w-full max-w-md">
+              {view === 'login' ? (
+                <LoginForm onLogin={onLogin} onSwitchToRegister={() => setView('register')} />
+              ) : (
+                <RegisterForm users={users} onRegister={onRegister} onSwitchToLogin={() => setView('login')} />
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -79,12 +106,13 @@ export function LoginPage({ users, onLogin, onRegister }: LoginPageProps) {
    LOGIN FORM
 ───────────────────────────────────────── */
 function LoginForm({ onLogin, onSwitchToRegister }: {
-  onLogin: (user: AppUser) => void;
+  onLogin: (user: AppUser, remember?: boolean) => void;
   onSwitchToRegister: () => void;
 }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [remember, setRemember] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -94,7 +122,7 @@ function LoginForm({ onLogin, onSwitchToRegister }: {
     setBusy(true);
     try {
       const user = await login(email.trim(), password);
-      onLogin(user);
+      onLogin(user, remember);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Unable to sign in. Please try again.');
     } finally {
@@ -105,26 +133,30 @@ function LoginForm({ onLogin, onSwitchToRegister }: {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-2xl text-gray-900 mb-1">Welcome back</h1>
+        <h1 className="font-serif text-3xl text-gray-900 mb-1.5" style={{ color: NAVY }}>Welcome back</h1>
         <p className="text-sm text-gray-500">Sign in to your CaseFlow account</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4 mb-6">
         <div>
-          <label className="block text-sm text-gray-700 mb-1.5">Email address</label>
-          <input type="email" required value={email}
-            onChange={e => { setEmail(e.target.value); setError(''); }}
-            placeholder="you@auca.ac.rw"
-            className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none"
-            onFocus={focusStyle} onBlur={blurStyle} />
+          <label className={LABEL_CLS}>Email address</label>
+          <div className="relative">
+            <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <input type="email" required value={email}
+              onChange={e => { setEmail(e.target.value); setError(''); }}
+              placeholder="you@auca.ac.rw"
+              className="w-full border border-gray-300 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none"
+              onFocus={focusStyle} onBlur={blurStyle} />
+          </div>
         </div>
         <div>
-          <label className="block text-sm text-gray-700 mb-1.5">Password</label>
+          <label className={LABEL_CLS}>Password</label>
           <div className="relative">
+            <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             <input type={showPassword ? 'text' : 'password'} required value={password}
               onChange={e => { setPassword(e.target.value); setError(''); }}
               placeholder="Enter your password"
-              className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none pr-11"
+              className="w-full border border-gray-300 rounded-xl pl-10 pr-11 py-2.5 text-sm focus:outline-none"
               onFocus={focusStyle} onBlur={blurStyle} />
             <button type="button" onClick={() => setShowPassword(s => !s)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -132,6 +164,12 @@ function LoginForm({ onLogin, onSwitchToRegister }: {
             </button>
           </div>
         </div>
+
+        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none w-fit">
+          <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)}
+            className="w-4 h-4 rounded border-gray-300 accent-[#1D3A5F]" />
+          Remember me
+        </label>
 
         {error && (
           <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
@@ -141,14 +179,14 @@ function LoginForm({ onLogin, onSwitchToRegister }: {
         )}
 
         <button type="submit" disabled={busy} className="w-full text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
-          style={{ backgroundColor: '#1D3A5F' }}>
+          style={{ backgroundColor: NAVY }}>
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
 
       <p className="text-center text-sm text-gray-500 mb-8">
         Are you a student?{' '}
-        <button onClick={onSwitchToRegister} className="font-medium hover:opacity-80 transition-opacity" style={{ color: '#1D3A5F' }}>
+        <button onClick={onSwitchToRegister} className="font-medium hover:opacity-80 transition-opacity" style={{ color: NAVY }}>
           Create a student account
         </button>
       </p>
@@ -273,7 +311,7 @@ function RegisterForm({ users, onRegister, onSwitchToLogin }: {
     <div>
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl text-gray-900 mb-1">Create Student Account</h1>
+        <h1 className="font-serif text-3xl mb-1.5" style={{ color: NAVY }}>Create Student Account</h1>
         <p className="text-sm text-gray-500">Students only · Staff accounts are issued by the Registrar</p>
       </div>
 
@@ -529,7 +567,7 @@ function OtpBoxes({ value, onChange }: { value: string; onChange: (v: string) =>
 function RegField({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-sm text-gray-700 mb-1.5">{label}</label>
+      <label className={LABEL_CLS}>{label}</label>
       {children}
       {error && (
         <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
