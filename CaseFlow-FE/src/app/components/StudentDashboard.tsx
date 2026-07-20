@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Eye, MessageSquare, CheckCircle, Clock, AlertCircle, FileText } from 'lucide-react';
+import { Eye, MessageSquare, CheckCircle, Clock, AlertCircle, FileText, Scale } from 'lucide-react';
 import { DashboardLayout, PageHeader, StatusBadge } from './DashboardLayout';
+import { DisciplinaryRulesPage } from './DisciplinaryRulesPage';
 import type { AppUser, DisciplinaryCase, CaseStatus } from './mockData';
 import { submitAppeal as apiSubmitAppeal, ApiError } from '../../lib/api';
 
@@ -46,6 +47,7 @@ export function StudentDashboard({ user, cases, setCases, onLogout, onUpdateProf
   const navItems = [
     { id: 'status', label: 'My Case Status', icon: <Eye size={16} /> },
     { id: 'appeal', label: 'Submit Appeal', icon: <MessageSquare size={16} /> },
+    { id: 'rules', label: 'Disciplinary Rules', icon: <Scale size={16} /> },
   ];
 
   async function submitAppeal(e: React.FormEvent) {
@@ -294,6 +296,8 @@ export function StudentDashboard({ user, cases, setCases, onLogout, onUpdateProf
           </div>
         </>
       )}
+
+      {activeNav === 'rules' && <DisciplinaryRulesPage />}
     </DashboardLayout>
   );
 }

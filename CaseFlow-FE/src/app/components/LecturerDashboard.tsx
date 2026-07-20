@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { FilePlus, List, ChevronRight, Paperclip, AlertCircle } from 'lucide-react';
+import { FilePlus, List, ChevronRight, Paperclip, AlertCircle, Scale } from 'lucide-react';
 import { DashboardLayout, PageHeader, StatusBadge } from './DashboardLayout';
+import { DisciplinaryRulesPage } from './DisciplinaryRulesPage';
 import type { AppUser, DisciplinaryCase } from './mockData';
 import { reportCase, ApiError } from '../../lib/api';
 
@@ -27,6 +28,7 @@ const OFFENSE_TYPES = [
 const navItems = [
   { id: 'report', label: 'Report New Incident', icon: <FilePlus size={16} /> },
   { id: 'mycases', label: 'My Reported Cases', icon: <List size={16} /> },
+  { id: 'rules', label: 'Disciplinary Rules', icon: <Scale size={16} /> },
 ];
 
 export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdateProfile }: Props) {
@@ -243,6 +245,8 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
           )}
         </>
       )}
+
+      {activeNav === 'rules' && <DisciplinaryRulesPage />}
     </DashboardLayout>
   );
 }
