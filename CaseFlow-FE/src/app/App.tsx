@@ -80,7 +80,7 @@ export default function App() {
           <button
             onClick={loadInitialData}
             className="text-sm text-white px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
-            style={{ backgroundColor: '#1D3A5F' }}
+            style={{ backgroundColor: '#0058B8' }}
           >
             Retry
           </button>
