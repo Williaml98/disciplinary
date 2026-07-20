@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import { FilePlus, List, ChevronRight, Paperclip, AlertCircle, Scale } from 'lucide-react';
-import { DashboardLayout, PageHeader, StatusBadge } from './DashboardLayout';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { FilePlus, List, ChevronRight, Paperclip, AlertCircle, Scale, ImagePlus, X } from 'lucide-react';
+import { DashboardLayout, PageHeader, StatusBadge, EvidenceGallery } from './DashboardLayout';
 import { DisciplinaryRulesPage } from './DisciplinaryRulesPage';
 import type { AppUser, DisciplinaryCase } from './mockData';
-import { reportCase, ApiError } from '../../lib/api';
+import { reportCase, uploadEvidence, ApiError } from '../../lib/api';
 
 interface Props {
   user: AppUser;
@@ -13,15 +13,27 @@ interface Props {
   onUpdateProfile: (updated: AppUser) => void;
 }
 
+// Summarized labels for AUCA's official offense catalog (Student Handbook 2018-2021, Ch. IX) —
+// see the "Disciplinary Rules" page for the full descriptions and mandated measures. The three
+// escalating "unauthorized political activity" tiers are collapsed into one category here since
+// which tier applies depends on the student's prior record, not the incident itself.
 const OFFENSE_TYPES = [
-  'Exam Cheating',
-  'Academic Plagiarism',
-  'Unauthorized Collaboration',
-  'Disruptive Behavior',
-  'Document Forgery',
-  'Misconduct',
-  'Property Damage',
-  'Harassment',
+  'Undermining University Principles',
+  'Criminal Arrest/Conviction',
+  'Obstruction of University Operations',
+  'Drunkenness on Campus',
+  'Possession of Alcohol or Tobacco',
+  'Drug Use or Possession',
+  'Possession of Weapons',
+  'Tampering with Fire Safety Equipment',
+  'Insubordination',
+  'Property Damage / Assault',
+  'Indecent Public Assault',
+  'Sexual Harassment',
+  'Incitement to Riot/Strike',
+  'Unauthorized Political Activity',
+  'Misrepresenting University Image',
+  'Academic Dishonesty (Cheating/Plagiarism)',
   'Other',
 ];
 
@@ -40,19 +52,35 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
     description: '',
     evidence: '',
   });
+  const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [selectedCase, setSelectedCase] = useState<DisciplinaryCase | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const myCases = cases.filter(c => c.reportedBy === user.name);
+
+  const previewUrls = useMemo(() => evidenceFiles.map(f => URL.createObjectURL(f)), [evidenceFiles]);
+  useEffect(() => {
+    return () => previewUrls.forEach(url => URL.revokeObjectURL(url));
+  }, [previewUrls]);
+
+  function addEvidenceFiles(fileList: FileList | null) {
+    if (!fileList) return;
+    setEvidenceFiles(prev => [...prev, ...Array.from(fileList)]);
+  }
+
+  function removeEvidenceFile(index: number) {
+    setEvidenceFiles(prev => prev.filter((_, i) => i !== index));
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitError('');
     setSubmitting(true);
     try {
-      const newCase = await reportCase({
+      let newCase = await reportCase({
         studentName: form.studentName,
         studentId: form.studentId,
         reportedBy: user.name,
@@ -61,9 +89,21 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
         description: form.description,
         evidence: form.evidence,
       });
+      if (evidenceFiles.length > 0) {
+        try {
+          newCase = await uploadEvidence(newCase.id, evidenceFiles, user.name);
+        } catch (uploadErr) {
+          setSubmitError(
+            uploadErr instanceof ApiError
+              ? `Case ${newCase.id} was created, but the evidence photos failed to upload: ${uploadErr.message}`
+              : `Case ${newCase.id} was created, but the evidence photos failed to upload.`
+          );
+        }
+      }
       setCases(prev => [newCase, ...prev]);
       setSubmitted(true);
       setForm({ studentName: '', studentId: '', offenseType: '', description: '', evidence: '' });
+      setEvidenceFiles([]);
       setTimeout(() => setSubmitted(false), 5000);
     } catch (err) {
       setSubmitError(err instanceof ApiError ? err.message : 'Unable to submit the report. Please try again.');
@@ -171,6 +211,42 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
                       />
                       <p className="text-xs text-gray-400 mt-1">Physical evidence should be submitted to the Student Affairs office with case reference number.</p>
                     </div>
+                    <div>
+                      <label className="block text-sm text-gray-700 mb-1.5">
+                        <span className="flex items-center gap-1.5"><ImagePlus size={14} /> Evidence Photos</span>
+                      </label>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={e => { addEvidenceFiles(e.target.files); e.target.value = ''; }}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full flex items-center justify-center gap-2 border border-dashed border-gray-300 rounded-lg py-3 text-sm text-gray-500 hover:border-[#1D3A5F]/40 hover:text-[#1D3A5F] transition-colors"
+                      >
+                        <ImagePlus size={15} /> Upload one or more photos
+                      </button>
+                      {evidenceFiles.length > 0 && (
+                        <div className="flex flex-wrap gap-3 mt-3">
+                          {evidenceFiles.map((file, i) => (
+                            <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 shrink-0">
+                              <img src={previewUrls[i]} alt={file.name} className="w-full h-full object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => removeEvidenceFile(i)}
+                                className="absolute top-0.5 right-0.5 bg-black/60 hover:bg-black/80 text-white rounded-full p-0.5 transition-colors"
+                              >
+                                <X size={10} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -276,6 +352,7 @@ function CaseDetailReadOnly({ c }: { c: DisciplinaryCase }) {
         <p className="text-sm text-gray-700 leading-relaxed">{c.description}</p>
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-4 mb-2">Evidence Submitted</p>
         <p className="text-sm text-gray-700">{c.evidence}</p>
+        <EvidenceGallery files={c.evidenceFiles} />
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 p-6">

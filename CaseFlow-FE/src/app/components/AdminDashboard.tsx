@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { LayoutDashboard, AlertTriangle, List, Clock, Search, ChevronRight, Bell, UserCog, Plus, Eye, EyeOff, CheckCircle, AlertCircle, BookOpen, Users, GraduationCap, Settings, Pencil, X, Scale } from 'lucide-react';
-import { DashboardLayout, PageHeader, StatusBadge } from './DashboardLayout';
+import { DashboardLayout, PageHeader, StatusBadge, EvidenceGallery } from './DashboardLayout';
 import { DisciplinaryRulesPage } from './DisciplinaryRulesPage';
 import type { AppUser, DisciplinaryCase, Role } from './mockData';
 import { createUser, updateUserRole, deleteUser as apiDeleteUser, ApiError } from '../../lib/api';
@@ -736,6 +736,7 @@ function AdminCaseDetail({ c }: { c: DisciplinaryCase }) {
         <p className="text-sm text-gray-700 leading-relaxed">{c.description}</p>
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-4 mb-2">Evidence</p>
         <p className="text-sm text-gray-700">{c.evidence}</p>
+        <EvidenceGallery files={c.evidenceFiles} />
       </div>
       {c.appealSubmitted && (
         <div className="bg-purple-50 border border-purple-200 rounded-2xl p-6">

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Inbox, MessageSquare, CheckCircle, Search, UserCheck, ChevronRight, Send, AlertTriangle, Scale } from 'lucide-react';
-import { DashboardLayout, PageHeader, StatusBadge } from './DashboardLayout';
+import { DashboardLayout, PageHeader, StatusBadge, EvidenceGallery } from './DashboardLayout';
 import { DisciplinaryRulesPage } from './DisciplinaryRulesPage';
 import type { AppUser, DisciplinaryCase, DecisionType } from './mockData';
 import {
@@ -300,6 +300,7 @@ function CommitteeCaseDetail({
         <p className="text-sm text-gray-700 leading-relaxed">{c.description}</p>
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-4 mb-2">Evidence on File</p>
         <p className="text-sm text-gray-700">{c.evidence}</p>
+        <EvidenceGallery files={c.evidenceFiles} />
       </div>
 
       {/* Appeal text if present */}

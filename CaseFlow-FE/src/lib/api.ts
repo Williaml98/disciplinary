@@ -85,6 +85,7 @@ interface CaseDto {
   registrationStatus: RegistrationStatus;
   notes: NoteDto[];
   auditTrail: AuditEntryDto[];
+  evidenceFiles: string[];
 }
 
 // BE timestamps are ISO instants; the FE displays them as "YYYY-MM-DD HH:MM" everywhere.
@@ -135,6 +136,7 @@ function mapCase(dto: CaseDto): DisciplinaryCase {
     appealText: dto.appealText ?? undefined,
     appealStatus: dto.appealStatus ?? undefined,
     registrationStatus: dto.registrationStatus,
+    evidenceFiles: dto.evidenceFiles.map(f => `${API_BASE_URL}${f}`),
   };
 }
 
@@ -207,6 +209,25 @@ export async function reportCase(payload: {
   evidence: string;
 }): Promise<DisciplinaryCase> {
   return mapCase(await request<CaseDto>('/cases', { method: 'POST', body: JSON.stringify(payload) }));
+}
+
+export async function uploadEvidence(caseId: string, files: File[], by?: string): Promise<DisciplinaryCase> {
+  const body = new FormData();
+  files.forEach(file => body.append('files', file));
+  if (by) body.append('by', by);
+
+  const res = await fetch(`${API_BASE_URL}/cases/${caseId}/evidence`, { method: 'POST', body });
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const errBody = await res.json();
+      if (errBody?.message) message = errBody.message;
+    } catch {
+      // response had no JSON body
+    }
+    throw new ApiError(res.status, message);
+  }
+  return mapCase(await res.json() as CaseDto);
 }
 
 export async function addCaseNote(caseId: string, author: string, text: string): Promise<DisciplinaryCase> {

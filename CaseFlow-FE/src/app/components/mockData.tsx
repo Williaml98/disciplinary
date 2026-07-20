@@ -26,6 +26,7 @@ export interface DisciplinaryCase {
   offenseType: string;
   description: string;
   evidence: string;
+  evidenceFiles: string[];
   reportDate: string;
   status: CaseStatus;
   decision?: DecisionType;

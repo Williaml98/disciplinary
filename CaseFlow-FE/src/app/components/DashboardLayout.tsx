@@ -202,6 +202,25 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
   );
 }
 
+export function EvidenceGallery({ files }: { files: string[] }) {
+  if (files.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-3 mt-3">
+      {files.map((url, i) => (
+        <a
+          key={url}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block w-20 h-20 rounded-lg overflow-hidden border border-gray-200 hover:border-[#1D3A5F]/40 transition-colors shrink-0"
+        >
+          <img src={url} alt={`Evidence ${i + 1}`} className="w-full h-full object-cover" />
+        </a>
+      ))}
+    </div>
+  );
+}
+
 export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
     'Reported': 'bg-gray-100 text-gray-700 border-gray-200',
