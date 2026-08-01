@@ -228,6 +228,19 @@ export async function fetchCurrentUser(): Promise<AppUser> {
   return mapUser(await request<UserDto>('/auth/me'));
 }
 
+export async function sendPasswordResetOtp(email: string): Promise<void> {
+  await request<void>('/auth/password/reset/otp', { method: 'POST', body: JSON.stringify({ email }) });
+}
+
+export async function resetPassword(email: string, otp: string, newPassword: string): Promise<AppUser> {
+  const { token, user } = await request<AuthDto>('/auth/password/reset', {
+    method: 'POST',
+    body: JSON.stringify({ email, otp, newPassword }),
+  });
+  storeToken(token, false);
+  return mapUser(user);
+}
+
 // ---- Users ----
 export async function fetchUsers(): Promise<AppUser[]> {
   return (await request<UserDto[]>('/users')).map(mapUser);

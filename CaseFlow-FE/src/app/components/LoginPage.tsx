@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { Eye, EyeOff, AlertCircle, CheckCircle, Check, Lock, GraduationCap, ArrowLeft, Mail, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, CheckCircle, Check, Lock, GraduationCap, ArrowLeft, Mail, RefreshCw, ShieldCheck, KeyRound } from 'lucide-react';
 import type { AppUser } from './mockData';
-import { login, register, sendRegistrationOtp, verifyRegistrationOtp, ApiError } from '../../lib/api';
+import {
+  login, register, sendRegistrationOtp, verifyRegistrationOtp,
+  sendPasswordResetOtp, resetPassword, ApiError,
+} from '../../lib/api';
 import logo from '../../imports/logo.png';
 
 const NAVY = '#1D3A5F';
@@ -23,7 +26,7 @@ function maskEmail(email: string): string {
 }
 
 export function LoginPage({ onLogin, onRegister }: LoginPageProps) {
-  const [view, setView] = useState<'login' | 'register'>('login');
+  const [view, setView] = useState<'login' | 'register' | 'forgot'>('login');
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4 sm:p-8"
@@ -88,9 +91,12 @@ export function LoginPage({ onLogin, onRegister }: LoginPageProps) {
           <div className="flex-1 flex items-start sm:items-center justify-center p-6 sm:p-10 py-8">
             <div className="w-full max-w-md">
               {view === 'login' ? (
-                <LoginForm onLogin={onLogin} onSwitchToRegister={() => setView('register')} />
-              ) : (
+                <LoginForm onLogin={onLogin} onSwitchToRegister={() => setView('register')}
+                  onForgotPassword={() => setView('forgot')} />
+              ) : view === 'register' ? (
                 <RegisterForm onRegister={onRegister} onSwitchToLogin={() => setView('login')} />
+              ) : (
+                <ForgotPasswordForm onReset={onLogin} onSwitchToLogin={() => setView('login')} />
               )}
             </div>
           </div>
@@ -103,9 +109,10 @@ export function LoginPage({ onLogin, onRegister }: LoginPageProps) {
 /* ─────────────────────────────────────────
    LOGIN FORM
 ───────────────────────────────────────── */
-function LoginForm({ onLogin, onSwitchToRegister }: {
+function LoginForm({ onLogin, onSwitchToRegister, onForgotPassword }: {
   onLogin: (user: AppUser) => void;
   onSwitchToRegister: () => void;
+  onForgotPassword: () => void;
 }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -163,11 +170,17 @@ function LoginForm({ onLogin, onSwitchToRegister }: {
           </div>
         </div>
 
-        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none w-fit">
-          <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)}
-            className="w-4 h-4 rounded border-gray-300 accent-[#1D3A5F]" />
-          Remember me
-        </label>
+        <div className="flex items-center justify-between">
+          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none w-fit">
+            <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 accent-[#1D3A5F]" />
+            Remember me
+          </label>
+          <button type="button" onClick={onForgotPassword}
+            className="text-sm font-medium hover:opacity-80 transition-opacity" style={{ color: NAVY }}>
+            Forgot password?
+          </button>
+        </div>
 
         {error && (
           <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
@@ -507,6 +520,208 @@ function RegisterForm({ onRegister, onSwitchToLogin }: {
           </button>
         </form>
       )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────
+   FORGOT PASSWORD FORM  (2-step OTP flow)
+───────────────────────────────────────── */
+function ForgotPasswordForm({ onReset, onSwitchToLogin }: {
+  onReset: (user: AppUser) => void;
+  onSwitchToLogin: () => void;
+}) {
+  const [step, setStep] = useState<'request' | 'reset'>('request');
+  const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [sendingOtp, setSendingOtp] = useState(false);
+
+  const [enteredOtp, setEnteredOtp] = useState('');
+  const [countdown, setCountdown] = useState(0);
+
+  const [password, setPassword] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [resetErrors, setResetErrors] = useState<Record<string, string>>({});
+  const [success, setSuccess] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const t = setTimeout(() => setCountdown(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [countdown]);
+
+  async function handleSendOtp(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim()) { setEmailError('Email is required.'); return; }
+    setEmailError('');
+    setSendingOtp(true);
+    try {
+      await sendPasswordResetOtp(email.trim());
+      setEnteredOtp('');
+      setResetErrors({});
+      setCountdown(60);
+      setStep('reset');
+    } catch (err) {
+      setEmailError(err instanceof ApiError ? err.message : 'Unable to send a reset code. Please try again.');
+    } finally {
+      setSendingOtp(false);
+    }
+  }
+
+  async function handleResend() {
+    setResetErrors(p => ({ ...p, otp: '' }));
+    setSendingOtp(true);
+    try {
+      await sendPasswordResetOtp(email.trim());
+      setEnteredOtp('');
+      setCountdown(60);
+    } catch (err) {
+      setResetErrors(p => ({ ...p, otp: err instanceof ApiError ? err.message : 'Unable to resend the code. Please try again.' }));
+    } finally {
+      setSendingOtp(false);
+    }
+  }
+
+  async function handleResetPassword(e: React.FormEvent) {
+    e.preventDefault();
+    const errors: Record<string, string> = {};
+    if (enteredOtp.length < 6) errors.otp = 'Please enter the complete 6-digit code.';
+    if (!password) errors.password = 'Password is required.';
+    else if (password.length < 8) errors.password = 'Minimum 8 characters.';
+    if (confirmPw !== password) errors.confirm = 'Passwords do not match.';
+    setResetErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    setResetting(true);
+    try {
+      const user = await resetPassword(email.trim(), enteredOtp, password);
+      setSuccess(true);
+      setTimeout(() => onReset(user), 1200);
+    } catch (err) {
+      setResetErrors({ otp: err instanceof ApiError ? err.message : 'Unable to reset your password. Please try again.' });
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  if (success) {
+    return (
+      <div className="text-center py-16">
+        <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#1D3A5F' }}>
+          <CheckCircle size={30} className="text-white" />
+        </div>
+        <h2 className="text-xl text-gray-900 mb-2">Password reset!</h2>
+        <p className="text-sm text-gray-500">Signing you in now…</p>
+      </div>
+    );
+  }
+
+  if (step === 'request') {
+    return (
+      <div>
+        <div className="mb-8">
+          <h1 className="font-serif text-3xl text-gray-900 mb-1.5" style={{ color: NAVY }}>Reset your password</h1>
+          <p className="text-sm text-gray-500">Enter your account email and we'll send you a reset code.</p>
+        </div>
+
+        <form onSubmit={handleSendOtp} className="space-y-4">
+          <RegField label="Email Address" error={emailError}>
+            <input type="email" value={email}
+              onChange={e => { setEmail(e.target.value); setEmailError(''); }}
+              placeholder="you@auca.ac.rw"
+              className={inputCls(!!emailError)} onFocus={focusStyle} onBlur={blurStyle} />
+          </RegField>
+
+          <button type="submit" disabled={sendingOtp} className="w-full flex items-center justify-center gap-2 text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity mt-2"
+            style={{ backgroundColor: '#1D3A5F' }}>
+            <Mail size={15} /> {sendingOtp ? 'Sending…' : 'Send Reset Code'}
+          </button>
+
+          <button type="button" onClick={onSwitchToLogin}
+            className="w-full flex items-center justify-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors pt-1">
+            <ArrowLeft size={14} /> Back to sign in
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-6">
+        <h1 className="font-serif text-3xl mb-1.5" style={{ color: NAVY }}>Reset your password</h1>
+      </div>
+
+      <form onSubmit={handleResetPassword} className="space-y-5">
+        <div className="text-center mb-2">
+          <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#1D3A5F' }}>
+            <KeyRound size={24} className="text-white" />
+          </div>
+          <p className="text-sm text-gray-700">We sent a 6-digit code to</p>
+          <p className="font-medium text-gray-900 mt-0.5">{maskEmail(email)}</p>
+        </div>
+
+        <div>
+          <label className="block text-sm text-gray-700 mb-3 text-center">Enter verification code</label>
+          <OtpBoxes value={enteredOtp} onChange={v => { setEnteredOtp(v); setResetErrors(p => ({ ...p, otp: '' })); }} />
+          {resetErrors.otp && (
+            <p className="text-xs text-red-600 mt-2 flex items-center justify-center gap-1">
+              <AlertCircle size={11} /> {resetErrors.otp}
+            </p>
+          )}
+        </div>
+
+        <RegField label="New Password" error={resetErrors.password}>
+          <div className="relative">
+            <input type={showPw ? 'text' : 'password'} value={password}
+              onChange={e => { setPassword(e.target.value); setResetErrors(p => ({ ...p, password: '' })); }}
+              placeholder="Minimum 8 characters"
+              className={inputCls(!!resetErrors.password) + ' pr-11'} onFocus={focusStyle} onBlur={blurStyle} />
+            <button type="button" onClick={() => setShowPw(s => !s)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+        </RegField>
+
+        <RegField label="Confirm Password" error={resetErrors.confirm}>
+          <div className="relative">
+            <input type={showConfirm ? 'text' : 'password'} value={confirmPw}
+              onChange={e => { setConfirmPw(e.target.value); setResetErrors(p => ({ ...p, confirm: '' })); }}
+              placeholder="Re-enter your password"
+              className={inputCls(!!resetErrors.confirm) + ' pr-11'} onFocus={focusStyle} onBlur={blurStyle} />
+            <button type="button" onClick={() => setShowConfirm(s => !s)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+        </RegField>
+
+        <button type="submit" disabled={resetting} className="w-full text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
+          style={{ backgroundColor: '#1D3A5F' }}>
+          {resetting ? 'Resetting…' : 'Reset Password'}
+        </button>
+
+        <div className="text-center text-sm text-gray-500">
+          {countdown > 0 ? (
+            <span>Resend code in <span className="font-medium" style={{ color: '#1D3A5F' }}>{countdown}s</span></span>
+          ) : (
+            <button type="button" onClick={handleResend} disabled={sendingOtp}
+              className="flex items-center gap-1.5 mx-auto font-medium hover:opacity-80 disabled:opacity-60 transition-opacity"
+              style={{ color: '#1D3A5F' }}>
+              <RefreshCw size={13} /> {sendingOtp ? 'Resending…' : 'Resend Code'}
+            </button>
+          )}
+        </div>
+
+        <button type="button" onClick={() => setStep('request')}
+          className="w-full flex items-center justify-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors">
+          <ArrowLeft size={14} /> Back
+        </button>
+      </form>
     </div>
   );
 }
