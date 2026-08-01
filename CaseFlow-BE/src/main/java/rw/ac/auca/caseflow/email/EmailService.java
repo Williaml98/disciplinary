@@ -37,13 +37,27 @@ public class EmailService {
     }
 
     public void sendOtpCode(String to, String code) {
-        String bodyHtml = "<p style=\"margin:0 0 20px;\">Use the code below to verify your email and finish creating your CaseFlow account.</p>"
+        String bodyHtml = otpEmailBody(
+                "Use the code below to verify your email and finish creating your CaseFlow account.", code,
+                "This code expires in 10 minutes. If you didn't request it, you can safely ignore this email.");
+        sendHtml(to, "Your CaseFlow verification code", bodyHtml);
+    }
+
+    public void sendPasswordResetCode(String to, String code) {
+        String bodyHtml = otpEmailBody(
+                "Use the code below to reset your CaseFlow password.", code,
+                "This code expires in 10 minutes. If you didn't request a password reset, "
+                        + "you can safely ignore this email — your password will stay unchanged.");
+        sendHtml(to, "Reset your CaseFlow password", bodyHtml);
+    }
+
+    private String otpEmailBody(String introText, String code, String footerText) {
+        return "<p style=\"margin:0 0 20px;\">" + introText + "</p>"
                 + "<div style=\"text-align:center;margin:0 0 20px;\">"
                 + "<span style=\"display:inline-block;font-family:'SF Mono',Consolas,Menlo,monospace;font-size:32px;font-weight:700;"
                 + "letter-spacing:8px;color:" + NAVY + ";background:#f0ead9;border:1px solid #e0d6bb;"
                 + "border-radius:12px;padding:16px 20px 16px 28px;\">" + escapeHtml(code) + "</span></div>"
-                + "<p style=\"margin:0;color:#6b7280;font-size:13px;\">This code expires in 10 minutes. If you didn't request it, you can safely ignore this email.</p>";
-        sendHtml(to, "Your CaseFlow verification code", bodyHtml);
+                + "<p style=\"margin:0;color:#6b7280;font-size:13px;\">" + footerText + "</p>";
     }
 
     private void sendHtml(String to, String subject, String bodyHtml) {

@@ -34,7 +34,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register",
-                                "/api/auth/register/otp", "/api/auth/register/otp/verify").permitAll()
+                                "/api/auth/register/otp", "/api/auth/register/otp/verify",
+                                "/api/auth/password/reset/otp", "/api/auth/password/reset").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/cases/*/evidence/*").permitAll()
                         // Open only while the database has zero users — see UserController.createUser.
                         .requestMatchers(HttpMethod.POST, "/api/users").permitAll()

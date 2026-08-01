@@ -13,13 +13,15 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import rw.ac.auca.caseflow.domain.AppUser;
 import rw.ac.auca.caseflow.domain.Role;
-import rw.ac.auca.caseflow.registration.RegistrationOtpService;
+import rw.ac.auca.caseflow.email.EmailService;
+import rw.ac.auca.caseflow.otp.OtpService;
 import rw.ac.auca.caseflow.repository.UserRepository;
 import rw.ac.auca.caseflow.security.AuthenticatedUser;
 import rw.ac.auca.caseflow.security.JwtService;
 import rw.ac.auca.caseflow.web.dto.AuthResponse;
 import rw.ac.auca.caseflow.web.dto.LoginRequest;
 import rw.ac.auca.caseflow.web.dto.RegisterStudentRequest;
+import rw.ac.auca.caseflow.web.dto.ResetPasswordRequest;
 import rw.ac.auca.caseflow.web.dto.SendOtpRequest;
 import rw.ac.auca.caseflow.web.dto.UserResponse;
 import rw.ac.auca.caseflow.web.dto.VerifyOtpRequest;
@@ -28,17 +30,22 @@ import rw.ac.auca.caseflow.web.dto.VerifyOtpRequest;
 @RequestMapping("/api/auth")
 public class AuthController {
 
+    private static final String REGISTER_PURPOSE = "register";
+    private static final String RESET_PASSWORD_PURPOSE = "reset-password";
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
-    private final RegistrationOtpService registrationOtpService;
+    private final OtpService otpService;
+    private final EmailService emailService;
 
     public AuthController(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService,
-                           RegistrationOtpService registrationOtpService) {
+                           OtpService otpService, EmailService emailService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
-        this.registrationOtpService = registrationOtpService;
+        this.otpService = otpService;
+        this.emailService = emailService;
     }
 
     @PostMapping("/login")
@@ -55,13 +62,13 @@ public class AuthController {
         if (userRepository.existsByEmailIgnoreCase(request.email())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already registered");
         }
-        registrationOtpService.sendCode(request.email());
+        otpService.sendCode(REGISTER_PURPOSE, request.email(), code -> emailService.sendOtpCode(request.email(), code));
     }
 
     @PostMapping("/register/otp/verify")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void verifyRegistrationOtp(@Valid @RequestBody VerifyOtpRequest request) {
-        registrationOtpService.verifyCode(request.email(), request.otp());
+        otpService.verifyCode(REGISTER_PURPOSE, request.email(), request.otp());
     }
 
     @PostMapping("/register")
@@ -69,8 +76,8 @@ public class AuthController {
         if (userRepository.existsByEmailIgnoreCase(request.email())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already registered");
         }
-        registrationOtpService.verifyCode(request.email(), request.otp());
-        registrationOtpService.consume(request.email());
+        otpService.verifyCode(REGISTER_PURPOSE, request.email(), request.otp());
+        otpService.consume(REGISTER_PURPOSE, request.email());
         AppUser user = new AppUser(
                 request.name(),
                 Role.STUDENT,
@@ -79,6 +86,25 @@ public class AuthController {
                 request.email(),
                 passwordEncoder.encode(request.password())
         );
+        AppUser saved = userRepository.save(user);
+        return new AuthResponse(jwtService.generateToken(saved, false), UserResponse.from(saved));
+    }
+
+    @PostMapping("/password/reset/otp")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void sendPasswordResetOtp(@Valid @RequestBody SendOtpRequest request) {
+        AppUser user = userRepository.findByEmailIgnoreCase(request.email())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No account found with that email"));
+        otpService.sendCode(RESET_PASSWORD_PURPOSE, user.getEmail(), code -> emailService.sendPasswordResetCode(user.getEmail(), code));
+    }
+
+    @PostMapping("/password/reset")
+    public AuthResponse resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        AppUser user = userRepository.findByEmailIgnoreCase(request.email())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No account found with that email"));
+        otpService.verifyCode(RESET_PASSWORD_PURPOSE, request.email(), request.otp());
+        otpService.consume(RESET_PASSWORD_PURPOSE, request.email());
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
         AppUser saved = userRepository.save(user);
         return new AuthResponse(jwtService.generateToken(saved, false), UserResponse.from(saved));
     }

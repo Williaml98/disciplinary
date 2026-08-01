@@ -1,33 +1,31 @@
-package rw.ac.auca.caseflow.registration;
+package rw.ac.auca.caseflow.otp;
 
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
-import rw.ac.auca.caseflow.email.EmailService;
 
 // In-memory by design: codes are short-lived and freely re-requestable, so losing
 // pending codes on a backend restart is a non-issue (unlike JwtService's signing key).
+// Keyed by purpose+email so, e.g., a registration code and a password-reset code for
+// the same address never collide.
 @Service
-public class RegistrationOtpService {
+public class OtpService {
 
     private static final Duration CODE_TTL = Duration.ofMinutes(10);
     private static final Duration RESEND_COOLDOWN = Duration.ofSeconds(60);
     private static final int MAX_ATTEMPTS = 5;
 
-    private final EmailService emailService;
     private final SecureRandom random = new SecureRandom();
     private final ConcurrentHashMap<String, Entry> pending = new ConcurrentHashMap<>();
 
-    public RegistrationOtpService(EmailService emailService) {
-        this.emailService = emailService;
-    }
-
-    public void sendCode(String email) {
-        String key = email.toLowerCase();
+    // emailSender is invoked with the generated code so each caller can send its own copy.
+    public void sendCode(String purpose, String email, Consumer<String> emailSender) {
+        String key = key(purpose, email);
         Entry existing = pending.get(key);
         if (existing != null && existing.sentAt.plus(RESEND_COOLDOWN).isAfter(Instant.now())) {
             throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
@@ -35,11 +33,11 @@ public class RegistrationOtpService {
         }
         String code = String.format("%06d", random.nextInt(1_000_000));
         pending.put(key, new Entry(code, Instant.now().plus(CODE_TTL), Instant.now()));
-        emailService.sendOtpCode(email, code);
+        emailSender.accept(code);
     }
 
-    public void verifyCode(String email, String code) {
-        String key = email.toLowerCase();
+    public void verifyCode(String purpose, String email, String code) {
+        String key = key(purpose, email);
         Entry entry = pending.get(key);
         if (entry == null || entry.expiresAt.isBefore(Instant.now())) {
             pending.remove(key);
@@ -57,8 +55,12 @@ public class RegistrationOtpService {
         }
     }
 
-    public void consume(String email) {
-        pending.remove(email.toLowerCase());
+    public void consume(String purpose, String email) {
+        pending.remove(key(purpose, email));
+    }
+
+    private static String key(String purpose, String email) {
+        return purpose + ":" + email.toLowerCase();
     }
 
     private static final class Entry {
