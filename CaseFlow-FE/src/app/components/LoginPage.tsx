@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Eye, EyeOff, AlertCircle, CheckCircle, Check, Lock, Zap, GraduationCap, ArrowLeft, Mail, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, CheckCircle, Check, Lock, GraduationCap, ArrowLeft, Mail, RefreshCw, ShieldCheck } from 'lucide-react';
 import type { AppUser } from './mockData';
-import { login, register, ApiError } from '../../lib/api';
+import { login, register, sendRegistrationOtp, verifyRegistrationOtp, ApiError } from '../../lib/api';
 import logo from '../../imports/logo.png';
 
 const NAVY = '#1D3A5F';
@@ -206,10 +206,12 @@ function RegisterForm({ onRegister, onSwitchToLogin }: {
   const [step, setStep] = useState<RegStep>('details');
   const [details, setDetails] = useState<Details>({ name: '', studentId: '', email: '' });
   const [detailErrors, setDetailErrors] = useState<Record<string, string>>({});
+  const [sendError, setSendError] = useState('');
+  const [sendingOtp, setSendingOtp] = useState(false);
 
-  const [generatedOtp, setGeneratedOtp] = useState('');
   const [enteredOtp, setEnteredOtp] = useState('');
   const [otpError, setOtpError] = useState('');
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [countdown, setCountdown] = useState(0);
 
   const [password, setPassword] = useState('');
@@ -228,16 +230,7 @@ function RegisterForm({ onRegister, onSwitchToLogin }: {
     return () => clearTimeout(t);
   }, [countdown]);
 
-  function generateAndSendOtp() {
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    setGeneratedOtp(code);
-    setEnteredOtp('');
-    setOtpError('');
-    setCountdown(60);
-    return code;
-  }
-
-  function handleSendOtp(e: React.FormEvent) {
+  async function handleSendOtp(e: React.FormEvent) {
     e.preventDefault();
     const errors: Record<string, string> = {};
     if (!details.name.trim()) errors.name = 'Full name is required.';
@@ -245,20 +238,49 @@ function RegisterForm({ onRegister, onSwitchToLogin }: {
     if (!details.email.trim()) errors.email = 'Email is required.';
     setDetailErrors(errors);
     if (Object.keys(errors).length > 0) return;
-    generateAndSendOtp();
-    setStep('otp');
+
+    setSendError('');
+    setSendingOtp(true);
+    try {
+      await sendRegistrationOtp(details.email.trim());
+      setEnteredOtp('');
+      setOtpError('');
+      setCountdown(60);
+      setStep('otp');
+    } catch (err) {
+      setSendError(err instanceof ApiError ? err.message : 'Unable to send a verification code. Please try again.');
+    } finally {
+      setSendingOtp(false);
+    }
   }
 
-  function handleResend() {
-    generateAndSendOtp();
+  async function handleResend() {
+    setOtpError('');
+    setSendingOtp(true);
+    try {
+      await sendRegistrationOtp(details.email.trim());
+      setEnteredOtp('');
+      setCountdown(60);
+    } catch (err) {
+      setOtpError(err instanceof ApiError ? err.message : 'Unable to resend the code. Please try again.');
+    } finally {
+      setSendingOtp(false);
+    }
   }
 
-  function handleVerifyOtp(e: React.FormEvent) {
+  async function handleVerifyOtp(e: React.FormEvent) {
     e.preventDefault();
     if (enteredOtp.length < 6) { setOtpError('Please enter the complete 6-digit code.'); return; }
-    if (enteredOtp !== generatedOtp) { setOtpError('Incorrect code. Please check and try again.'); return; }
     setOtpError('');
-    setStep('password');
+    setVerifyingOtp(true);
+    try {
+      await verifyRegistrationOtp(details.email.trim(), enteredOtp);
+      setStep('password');
+    } catch (err) {
+      setOtpError(err instanceof ApiError ? err.message : 'Incorrect code. Please check and try again.');
+    } finally {
+      setVerifyingOtp(false);
+    }
   }
 
   async function handleCreateAccount(e: React.FormEvent) {
@@ -278,6 +300,7 @@ function RegisterForm({ onRegister, onSwitchToLogin }: {
         studentId: details.studentId.trim(),
         email: details.email.trim(),
         password,
+        otp: enteredOtp,
       });
       setSuccess(true);
       setTimeout(() => onRegister(newUser), 1200);
@@ -356,9 +379,16 @@ function RegisterForm({ onRegister, onSwitchToLogin }: {
               className={inputCls(!!detailErrors.email)} onFocus={focusStyle} onBlur={blurStyle} />
           </RegField>
 
-          <button type="submit" className="w-full flex items-center justify-center gap-2 text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 transition-opacity mt-2"
+          {sendError && (
+            <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+              <AlertCircle size={15} className="shrink-0" />
+              <p className="text-sm">{sendError}</p>
+            </div>
+          )}
+
+          <button type="submit" disabled={sendingOtp} className="w-full flex items-center justify-center gap-2 text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity mt-2"
             style={{ backgroundColor: '#1D3A5F' }}>
-            <Mail size={15} /> Send Verification Code
+            <Mail size={15} /> {sendingOtp ? 'Sending…' : 'Send Verification Code'}
           </button>
 
           <p className="text-center text-sm text-gray-500 pt-1">
@@ -381,18 +411,6 @@ function RegisterForm({ onRegister, onSwitchToLogin }: {
             <p className="font-medium text-gray-900 mt-0.5">{maskEmail(details.email)}</p>
           </div>
 
-          {/* Demo OTP notice */}
-          <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-            <Zap size={15} className="text-amber-600 mt-0.5 shrink-0" />
-            <div>
-              <p className="text-xs text-amber-800 font-semibold mb-0.5">Demo Mode</p>
-              <p className="text-xs text-amber-700">
-                In production this would be emailed. Your OTP is:{' '}
-                <span className="font-mono font-bold text-amber-900 tracking-widest">{generatedOtp}</span>
-              </p>
-            </div>
-          </div>
-
           {/* OTP input boxes */}
           <div>
             <label className="block text-sm text-gray-700 mb-3 text-center">Enter verification code</label>
@@ -404,9 +422,9 @@ function RegisterForm({ onRegister, onSwitchToLogin }: {
             )}
           </div>
 
-          <button type="submit" className="w-full flex items-center justify-center gap-2 text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 transition-opacity"
+          <button type="submit" disabled={verifyingOtp} className="w-full flex items-center justify-center gap-2 text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
             style={{ backgroundColor: '#1D3A5F' }}>
-            <ShieldCheck size={15} /> Verify Code
+            <ShieldCheck size={15} /> {verifyingOtp ? 'Verifying…' : 'Verify Code'}
           </button>
 
           {/* Resend */}
@@ -414,10 +432,10 @@ function RegisterForm({ onRegister, onSwitchToLogin }: {
             {countdown > 0 ? (
               <span>Resend code in <span className="font-medium" style={{ color: '#1D3A5F' }}>{countdown}s</span></span>
             ) : (
-              <button type="button" onClick={handleResend}
-                className="flex items-center gap-1.5 mx-auto font-medium hover:opacity-80 transition-opacity"
+              <button type="button" onClick={handleResend} disabled={sendingOtp}
+                className="flex items-center gap-1.5 mx-auto font-medium hover:opacity-80 disabled:opacity-60 transition-opacity"
                 style={{ color: '#1D3A5F' }}>
-                <RefreshCw size={13} /> Resend OTP
+                <RefreshCw size={13} /> {sendingOtp ? 'Resending…' : 'Resend OTP'}
               </button>
             )}
           </div>

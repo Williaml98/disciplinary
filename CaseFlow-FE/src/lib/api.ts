@@ -204,11 +204,20 @@ export async function login(email: string, password: string, remember: boolean):
   return mapUser(user);
 }
 
+export async function sendRegistrationOtp(email: string): Promise<void> {
+  await request<void>('/auth/register/otp', { method: 'POST', body: JSON.stringify({ email }) });
+}
+
+export async function verifyRegistrationOtp(email: string, otp: string): Promise<void> {
+  await request<void>('/auth/register/otp/verify', { method: 'POST', body: JSON.stringify({ email, otp }) });
+}
+
 export async function register(payload: {
   name: string;
   studentId: string;
   email: string;
   password: string;
+  otp: string;
 }): Promise<AppUser> {
   const { token, user } = await request<AuthDto>('/auth/register', { method: 'POST', body: JSON.stringify(payload) });
   storeToken(token, false);
