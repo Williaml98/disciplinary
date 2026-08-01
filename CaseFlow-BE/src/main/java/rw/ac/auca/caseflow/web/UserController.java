@@ -3,6 +3,10 @@ package rw.ac.auca.caseflow.web;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,7 +19,9 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import rw.ac.auca.caseflow.domain.AppUser;
+import rw.ac.auca.caseflow.domain.Role;
 import rw.ac.auca.caseflow.repository.UserRepository;
+import rw.ac.auca.caseflow.security.AuthenticatedUser;
 import rw.ac.auca.caseflow.web.dto.CreateUserRequest;
 import rw.ac.auca.caseflow.web.dto.PasswordChangeRequest;
 import rw.ac.auca.caseflow.web.dto.ProfileUpdateRequest;
@@ -35,6 +41,7 @@ public class UserController {
     }
 
     @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public List<UserResponse> listUsers() {
         return userRepository.findAll().stream().map(UserResponse::from).toList();
     }
@@ -42,6 +49,17 @@ public class UserController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public UserResponse createUser(@Valid @RequestBody CreateUserRequest request) {
+        // Open only to bootstrap the very first account on an empty database (there's no other
+        // login-gated way to create it); once any user exists, only an admin may create more.
+        boolean databaseIsEmpty = userRepository.count() == 0;
+        if (!databaseIsEmpty) {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            boolean isAdmin = authentication != null && authentication.getPrincipal() instanceof AuthenticatedUser caller
+                    && caller.role() == Role.ADMIN;
+            if (!isAdmin) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only an admin can create new users");
+            }
+        }
         if (userRepository.existsByEmailIgnoreCase(request.email())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already registered");
         }
@@ -57,7 +75,9 @@ public class UserController {
     }
 
     @PatchMapping("/{id}")
-    public UserResponse updateProfile(@PathVariable Long id, @Valid @RequestBody ProfileUpdateRequest request) {
+    public UserResponse updateProfile(@PathVariable Long id, @Valid @RequestBody ProfileUpdateRequest request,
+                                       @AuthenticationPrincipal AuthenticatedUser caller) {
+        requireSelfOrAdmin(id, caller);
         AppUser user = findOrThrow(id);
         user.setName(request.name());
         user.setEmail(request.email());
@@ -67,6 +87,7 @@ public class UserController {
     }
 
     @PatchMapping("/{id}/role")
+    @PreAuthorize("hasRole('ADMIN')")
     public UserResponse updateRole(@PathVariable Long id, @Valid @RequestBody RoleUpdateRequest request) {
         AppUser user = findOrThrow(id);
         user.setRole(request.role());
@@ -74,7 +95,9 @@ public class UserController {
     }
 
     @PostMapping("/{id}/password")
-    public UserResponse changePassword(@PathVariable Long id, @Valid @RequestBody PasswordChangeRequest request) {
+    public UserResponse changePassword(@PathVariable Long id, @Valid @RequestBody PasswordChangeRequest request,
+                                        @AuthenticationPrincipal AuthenticatedUser caller) {
+        requireSelfOrAdmin(id, caller);
         AppUser user = findOrThrow(id);
         if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current password is incorrect");
@@ -85,11 +108,18 @@ public class UserController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasRole('ADMIN')")
     public void deleteUser(@PathVariable Long id) {
         if (!userRepository.existsById(id)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User " + id + " not found");
         }
         userRepository.deleteById(id);
+    }
+
+    private static void requireSelfOrAdmin(Long id, AuthenticatedUser caller) {
+        if (caller == null || (!caller.id().equals(id) && caller.role() != Role.ADMIN)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only manage your own account");
+        }
     }
 
     private AppUser findOrThrow(Long id) {

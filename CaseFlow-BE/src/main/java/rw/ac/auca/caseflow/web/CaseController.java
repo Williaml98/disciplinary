@@ -10,6 +10,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.MediaTypeFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,9 +29,11 @@ import rw.ac.auca.caseflow.domain.DecisionType;
 import rw.ac.auca.caseflow.domain.DisciplinaryCase;
 import rw.ac.auca.caseflow.domain.Note;
 import rw.ac.auca.caseflow.domain.RegistrationStatus;
+import rw.ac.auca.caseflow.domain.Role;
 import rw.ac.auca.caseflow.email.EmailService;
 import rw.ac.auca.caseflow.repository.CaseRepository;
 import rw.ac.auca.caseflow.repository.UserRepository;
+import rw.ac.auca.caseflow.security.AuthenticatedUser;
 import rw.ac.auca.caseflow.storage.EvidenceStorage;
 import rw.ac.auca.caseflow.web.dto.AppealRequest;
 import rw.ac.auca.caseflow.web.dto.AppealResolutionRequest;
@@ -58,17 +62,23 @@ public class CaseController {
     }
 
     @GetMapping
-    public List<CaseResponse> listCases() {
-        return caseRepository.findAll().stream().map(CaseResponse::from).toList();
+    public List<CaseResponse> listCases(@AuthenticationPrincipal AuthenticatedUser caller) {
+        List<DisciplinaryCase> cases = caller.role() == Role.STUDENT
+                ? caseRepository.findByStudentId(caller.studentId())
+                : caseRepository.findAll();
+        return cases.stream().map(CaseResponse::from).toList();
     }
 
     @GetMapping("/{id}")
-    public CaseResponse getCase(@PathVariable String id) {
-        return CaseResponse.from(findOrThrow(id));
+    public CaseResponse getCase(@PathVariable String id, @AuthenticationPrincipal AuthenticatedUser caller) {
+        DisciplinaryCase disciplinaryCase = findOrThrow(id);
+        requireCaseAccess(disciplinaryCase, caller);
+        return CaseResponse.from(disciplinaryCase);
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAnyRole('LECTURER','ADMIN')")
     public CaseResponse reportCase(@Valid @RequestBody NewCaseRequest request) {
         String id = nextCaseId();
         Instant now = Instant.now();
@@ -94,6 +104,7 @@ public class CaseController {
     }
 
     @PostMapping("/{id}/evidence")
+    @PreAuthorize("hasAnyRole('LECTURER','ADMIN')")
     public CaseResponse uploadEvidence(@PathVariable String id,
                                         @RequestParam("files") List<MultipartFile> files,
                                         @RequestParam(value = "by", required = false) String by) {
@@ -115,6 +126,7 @@ public class CaseController {
     }
 
     @PostMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('COMMITTEE','ADMIN')")
     public CaseResponse updateStatus(@PathVariable String id, @Valid @RequestBody StatusUpdateRequest request) {
         DisciplinaryCase disciplinaryCase = findOrThrow(id);
         disciplinaryCase.setStatus(request.status());
@@ -124,6 +136,7 @@ public class CaseController {
     }
 
     @PostMapping("/{id}/notes")
+    @PreAuthorize("hasRole('COMMITTEE')")
     public CaseResponse addNote(@PathVariable String id, @Valid @RequestBody NoteRequest request) {
         DisciplinaryCase disciplinaryCase = findOrThrow(id);
         Instant now = Instant.now();
@@ -143,6 +156,7 @@ public class CaseController {
     }
 
     @PostMapping("/{id}/decision")
+    @PreAuthorize("hasRole('COMMITTEE')")
     public CaseResponse recordDecision(@PathVariable String id, @Valid @RequestBody DecisionRequest request) {
         DisciplinaryCase disciplinaryCase = findOrThrow(id);
         String actor = actorOrSystem(request.by());
@@ -169,8 +183,11 @@ public class CaseController {
     }
 
     @PostMapping("/{id}/appeal")
-    public CaseResponse submitAppeal(@PathVariable String id, @Valid @RequestBody AppealRequest request) {
+    @PreAuthorize("hasRole('STUDENT')")
+    public CaseResponse submitAppeal(@PathVariable String id, @Valid @RequestBody AppealRequest request,
+                                      @AuthenticationPrincipal AuthenticatedUser caller) {
         DisciplinaryCase disciplinaryCase = findOrThrow(id);
+        requireCaseAccess(disciplinaryCase, caller);
         Instant now = Instant.now();
 
         disciplinaryCase.submitAppeal(request.appealText());
@@ -183,6 +200,7 @@ public class CaseController {
     }
 
     @PostMapping("/{id}/appeal/resolution")
+    @PreAuthorize("hasRole('COMMITTEE')")
     public CaseResponse resolveAppeal(@PathVariable String id, @Valid @RequestBody AppealResolutionRequest request) {
         DisciplinaryCase disciplinaryCase = findOrThrow(id);
         String actor = actorOrSystem(request.by());
@@ -206,6 +224,7 @@ public class CaseController {
     }
 
     @PostMapping("/{id}/reintegration")
+    @PreAuthorize("hasRole('COMMITTEE')")
     public CaseResponse approveReintegration(@PathVariable String id, @Valid @RequestBody ReintegrationRequest request) {
         DisciplinaryCase disciplinaryCase = findOrThrow(id);
         String actor = actorOrSystem(request.by());
@@ -235,6 +254,12 @@ public class CaseController {
 
     private static String actorOrSystem(String by) {
         return (by == null || by.isBlank()) ? "System" : by;
+    }
+
+    private static void requireCaseAccess(DisciplinaryCase disciplinaryCase, AuthenticatedUser caller) {
+        if (caller.role() == Role.STUDENT && !disciplinaryCase.getStudentId().equals(caller.studentId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have access to this case");
+        }
     }
 
     private void notifyStudentOfDecision(DisciplinaryCase disciplinaryCase) {

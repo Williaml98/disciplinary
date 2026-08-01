@@ -23,6 +23,10 @@ caseflow:
     from: noreply@auca.ac.rw
   uploads:
     dir: build/test-uploads
+  jwt:
+    secret: test-only-jwt-signing-secret-not-used-outside-of-tests-at-all
+    expiration-minutes: 720
+    remember-expiration-minutes: 43200
 
 server:
   error:

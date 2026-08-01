@@ -31,6 +31,12 @@ caseflow:
     from: ${SMTP_FROM:noreply@auca.ac.rw}
   uploads:
     dir: ${CASEFLOW_UPLOADS_DIR:uploads}
+  jwt:
+    # Dev-only default so the app works with zero setup, same pattern as SMTP below.
+    # Override via JWT_SECRET in .env for anything beyond local dev — never commit a real one.
+    secret: ${JWT_SECRET:xHrCyULFQfVaEz_j1SNuDOK3JQBnkRe3hguSnrNbKBm7_NKEYCg39SaCqrd3JDmy}
+    expiration-minutes: ${JWT_EXPIRATION_MINUTES:720}
+    remember-expiration-minutes: ${JWT_REMEMBER_EXPIRATION_MINUTES:43200}
 
 server:
   port: 8080
