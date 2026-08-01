@@ -33,7 +33,8 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/error").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register",
+                                "/api/auth/register/otp", "/api/auth/register/otp/verify").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/cases/*/evidence/*").permitAll()
                         // Open only while the database has zero users — see UserController.createUser.
                         .requestMatchers(HttpMethod.POST, "/api/users").permitAll()

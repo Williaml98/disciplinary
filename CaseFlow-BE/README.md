@@ -23,6 +23,8 @@ Tests do **not** need Postgres/Docker running — `./mvnw test` uses an in-memor
 
 Stateless JWT bearer tokens via Spring Security — no server-side session store. `POST /api/auth/login` and `POST /api/auth/register` return `{ token, user }`; every other endpoint (except the bootstrap window on `POST /api/users` and evidence-photo downloads, see below) requires `Authorization: Bearer <token>`. `GET /api/auth/me` returns the caller's own current record, used by the FE to restore a session from a stored token without re-authenticating.
 
+- **Registration email verification**: self-registration is a real three-step flow, not client-side theater. `POST /api/auth/register/otp` generates a 6-digit code server-side, holds it in `RegistrationOtpService` (in-memory, keyed by email — 10-minute expiry, 60-second resend cooldown, 5 incorrect-attempt cap), and emails it via `EmailService`. `POST /api/auth/register/otp/verify` checks a code without consuming it (gives the FE immediate feedback on step 2). `POST /api/auth/register` itself re-verifies and **consumes** the code as the actual security boundary — the code is never sent back to the client, only ever to the registrant's inbox.
+
 - **Token lifetime**: 12 hours normally, 30 days if `remember: true` was passed to `/auth/login` — both configurable via `JWT_EXPIRATION_MINUTES`/`JWT_REMEMBER_EXPIRATION_MINUTES` in `.env`. A dev-only default `JWT_SECRET` is baked into `application.yml` so this needs zero setup locally; generate and set a real one (`openssl rand -base64 48`) before this goes anywhere beyond your machine.
 - **Role checks** live as `@PreAuthorize` annotations directly on each `CaseController`/`UserController` method — e.g. only `COMMITTEE` can record a decision, only `LECTURER`/`ADMIN` can report an incident, only `ADMIN` can list/delete users. A `STUDENT` caller additionally only ever sees their own case(s) from `GET /api/cases`/`GET /api/cases/{id}` — enforced server-side in `CaseController`, not just hidden in the FE.
 - **Evidence photo downloads** (`GET /api/cases/{id}/evidence/{filename}`) are deliberately left unauthenticated — plain `<img>` tags can't send an `Authorization` header, and the filenames are already server-generated UUIDs, so this is "unlisted URL" protection rather than open browsing.
@@ -49,7 +51,9 @@ Config is read from environment variables (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERN
 | Method & path | Auth | Description |
 | --- | --- | --- |
 | `POST /api/auth/login` | Open | `{ email, password, remember }` → `{ token, user }` (401 on failure) |
-| `POST /api/auth/register` | Open | Self-register a student account (role forced to `student`) → `{ token, user }` |
+| `POST /api/auth/register/otp` | Open | `{ email }` → emails a 6-digit code (409 if already registered, 429 if resent too soon) |
+| `POST /api/auth/register/otp/verify` | Open | `{ email, otp }` → 204 if correct, 400 otherwise (doesn't consume the code) |
+| `POST /api/auth/register` | Open | Self-register a student account (role forced to `student`); requires a valid `otp` from the steps above, which it consumes → `{ token, user }` |
 | `GET /api/auth/me` | Any | Returns the caller's own current user record |
 | `GET /api/users` | Admin | List all users |
 | `POST /api/users` | Open until 1st user exists, then Admin | Create a user with any role (admin "create account" flow) |
@@ -76,6 +80,7 @@ Passwords are hashed with BCrypt.
 - `domain/` — JPA entities (`AppUser`, `DisciplinaryCase`, `Note`, `AuditEntry`) and enums (`Role`, `CaseStatus`, `DecisionType`, `RegistrationStatus`, `AppealStatus`).
 - `repository/` — Spring Data JPA repositories.
 - `security/` — `JwtService` (sign/parse tokens), `JwtAuthenticationFilter` (reads the `Authorization` header, populates `SecurityContextHolder`), `SecurityConfig` (`SecurityFilterChain`, CORS, permitAll rules), `AuthenticatedUser` (the `@AuthenticationPrincipal` type — id/email/role/studentId, trusted straight from the token's claims with no DB round-trip per request).
+- `registration/RegistrationOtpService.java` — in-memory email-verification codes for self-registration (send/verify/consume); see "Authentication" above.
 - `web/` — REST controllers (`AuthController`, `UserController`, `CaseController`) and their request/response DTOs under `web/dto/`.
 - `email/EmailService.java` — thin wrapper over `JavaMailSender`; swallows and logs send failures rather than throwing, so a broken SMTP config never breaks the underlying case/user action.
 - `storage/EvidenceStorage.java` — stores uploaded evidence photos on the local filesystem under `caseflow.uploads.dir` (default `./uploads/{caseId}/{uuid}.{ext}`, gitignored). Filenames are always server-generated from a UUID plus an extension derived from the validated content type — neither upload nor download ever trusts a client-supplied filename or path segment.
