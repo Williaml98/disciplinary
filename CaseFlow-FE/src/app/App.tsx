@@ -5,63 +5,62 @@ import { CommitteeDashboard } from './components/CommitteeDashboard';
 import { StudentDashboard } from './components/StudentDashboard';
 import { AdminDashboard } from './components/AdminDashboard';
 import type { AppUser, DisciplinaryCase } from './components/mockData';
-import { fetchUsers, fetchCases, ApiError } from '../lib/api';
-
-const REMEMBERED_USER_KEY = 'caseflow.rememberedUserId';
+import { fetchCases, fetchCurrentUser, hasStoredToken, logout, setUnauthorizedHandler, ApiError } from '../lib/api';
 
 export default function App() {
-  const [users, setUsers] = useState<AppUser[]>([]);
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [cases, setCases] = useState<DisciplinaryCase[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
-    loadInitialData();
+    setUnauthorizedHandler(() => setCurrentUser(null));
+    restoreSession();
   }, []);
 
-  async function loadInitialData() {
+  async function restoreSession() {
     setLoading(true);
     setLoadError('');
     try {
-      const [fetchedUsers, fetchedCases] = await Promise.all([fetchUsers(), fetchCases()]);
-      setUsers(fetchedUsers);
-      setCases(fetchedCases);
-
-      const rememberedId = localStorage.getItem(REMEMBERED_USER_KEY);
-      if (rememberedId) {
-        const remembered = fetchedUsers.find(u => u.id === rememberedId);
-        if (remembered) setCurrentUser(remembered);
-        else localStorage.removeItem(REMEMBERED_USER_KEY);
+      if (hasStoredToken()) {
+        const user = await fetchCurrentUser();
+        setCurrentUser(user);
+        setCases(await fetchCases());
       }
     } catch (err) {
-      setLoadError(
-        err instanceof ApiError ? err.message : 'Could not reach the CaseFlow server. Is the backend running?'
-      );
+      // A 401 here just means the stored token expired — setUnauthorizedHandler already
+      // reset currentUser to null, so this isn't a real error worth surfacing.
+      if (!(err instanceof ApiError && err.status === 401)) {
+        setLoadError(
+          err instanceof ApiError ? err.message : 'Could not reach the CaseFlow server. Is the backend running?'
+        );
+      }
     } finally {
       setLoading(false);
     }
   }
 
-  function handleLogin(user: AppUser, remember?: boolean) {
-    setCurrentUser(user);
-    if (remember) localStorage.setItem(REMEMBERED_USER_KEY, user.id);
-    else localStorage.removeItem(REMEMBERED_USER_KEY);
+  async function handleLogin(user: AppUser) {
+    setLoadError('');
+    try {
+      const fetchedCases = await fetchCases();
+      setCurrentUser(user);
+      setCases(fetchedCases);
+    } catch (err) {
+      setLoadError(
+        err instanceof ApiError ? err.message : 'Could not reach the CaseFlow server. Is the backend running?'
+      );
+    }
   }
 
   function handleLogout() {
+    logout();
     setCurrentUser(null);
-    localStorage.removeItem(REMEMBERED_USER_KEY);
-  }
-
-  function handleRegister(newUser: AppUser) {
-    setUsers(prev => [...prev, newUser]);
-    setCurrentUser(newUser);
+    setCases([]);
   }
 
   function handleUpdateProfile(updated: AppUser) {
     setCurrentUser(updated);
-    setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
   }
 
   if (loading) {
@@ -78,7 +77,7 @@ export default function App() {
         <div className="max-w-sm text-center">
           <p className="text-sm text-red-600 mb-3">{loadError}</p>
           <button
-            onClick={loadInitialData}
+            onClick={restoreSession}
             className="text-sm text-white px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
             style={{ backgroundColor: '#1D3A5F' }}
           >
@@ -92,9 +91,8 @@ export default function App() {
   if (!currentUser) {
     return (
       <LoginPage
-        users={users}
         onLogin={handleLogin}
-        onRegister={handleRegister}
+        onRegister={handleLogin}
       />
     );
   }
@@ -114,8 +112,8 @@ export default function App() {
     case 'student':
       return <StudentDashboard {...sharedProps} user={currentUser} />;
     case 'admin':
-      return <AdminDashboard {...sharedProps} user={currentUser} users={users} setUsers={setUsers} />;
+      return <AdminDashboard {...sharedProps} user={currentUser} />;
     default:
-      return <LoginPage users={users} onLogin={handleLogin} onRegister={handleRegister} />;
+      return <LoginPage onLogin={handleLogin} onRegister={handleLogin} />;
   }
 }

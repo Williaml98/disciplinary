@@ -1,15 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { LayoutDashboard, AlertTriangle, List, Clock, Search, ChevronRight, Bell, UserCog, Plus, Eye, EyeOff, CheckCircle, AlertCircle, BookOpen, Users, GraduationCap, Settings, Pencil, X, Scale } from 'lucide-react';
 import { DashboardLayout, PageHeader, StatusBadge, EvidenceGallery } from './DashboardLayout';
 import { DisciplinaryRulesPage } from './DisciplinaryRulesPage';
 import type { AppUser, DisciplinaryCase, Role } from './mockData';
-import { createUser, updateUserRole, deleteUser as apiDeleteUser, ApiError } from '../../lib/api';
+import { fetchUsers, createUser, updateUserRole, deleteUser as apiDeleteUser, ApiError } from '../../lib/api';
 
 interface Props {
   user: AppUser;
-  users: AppUser[];
-  setUsers: React.Dispatch<React.SetStateAction<AppUser[]>>;
   cases: DisciplinaryCase[];
   onLogout: () => void;
   onUpdateProfile: (updated: AppUser) => void;
@@ -49,11 +47,19 @@ const ROLE_COLORS: Record<Role, string> = {
   admin: 'bg-[#1D3A5F]/10 text-[#1D3A5F] border-[#1D3A5F]/20',
 };
 
-export function AdminDashboard({ user, users, setUsers, cases, onLogout, onUpdateProfile }: Props) {
+export function AdminDashboard({ user, cases, onLogout, onUpdateProfile }: Props) {
   const [activeNav, setActiveNav] = useState('overview');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [selectedCase, setSelectedCase] = useState<DisciplinaryCase | null>(null);
+  const [users, setUsers] = useState<AppUser[]>([]);
+  const [usersError, setUsersError] = useState('');
+
+  useEffect(() => {
+    fetchUsers()
+      .then(setUsers)
+      .catch(err => setUsersError(err instanceof ApiError ? err.message : 'Unable to load users.'));
+  }, []);
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -262,7 +268,19 @@ export function AdminDashboard({ user, users, setUsers, cases, onLogout, onUpdat
 
       {/* ── USER MANAGEMENT ── */}
       {activeNav === 'users' && (
-        <UserManagement currentAdmin={user} users={users} setUsers={setUsers} />
+        usersError ? (
+          <>
+            <PageHeader title="User Management" />
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8">
+              <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3 max-w-2xl mx-auto">
+                <AlertCircle size={15} className="shrink-0" />
+                <p className="text-sm">{usersError}</p>
+              </div>
+            </div>
+          </>
+        ) : (
+          <UserManagement currentAdmin={user} users={users} setUsers={setUsers} />
+        )
       )}
 
       {/* ── AUDIT LOG ── */}

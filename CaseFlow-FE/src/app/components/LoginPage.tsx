@@ -10,8 +10,7 @@ const ACCENT = '#9CC7EE';
 const LABEL_CLS = 'block text-xs font-semibold tracking-wider text-gray-500 uppercase mb-2';
 
 interface LoginPageProps {
-  users: AppUser[];
-  onLogin: (user: AppUser, remember?: boolean) => void;
+  onLogin: (user: AppUser) => void;
   onRegister: (user: AppUser) => void;
 }
 
@@ -23,7 +22,7 @@ function maskEmail(email: string): string {
   return `${visible}${stars}@${domain}`;
 }
 
-export function LoginPage({ users, onLogin, onRegister }: LoginPageProps) {
+export function LoginPage({ onLogin, onRegister }: LoginPageProps) {
   const [view, setView] = useState<'login' | 'register'>('login');
 
   return (
@@ -91,7 +90,7 @@ export function LoginPage({ users, onLogin, onRegister }: LoginPageProps) {
               {view === 'login' ? (
                 <LoginForm onLogin={onLogin} onSwitchToRegister={() => setView('register')} />
               ) : (
-                <RegisterForm users={users} onRegister={onRegister} onSwitchToLogin={() => setView('login')} />
+                <RegisterForm onRegister={onRegister} onSwitchToLogin={() => setView('login')} />
               )}
             </div>
           </div>
@@ -105,7 +104,7 @@ export function LoginPage({ users, onLogin, onRegister }: LoginPageProps) {
    LOGIN FORM
 ───────────────────────────────────────── */
 function LoginForm({ onLogin, onSwitchToRegister }: {
-  onLogin: (user: AppUser, remember?: boolean) => void;
+  onLogin: (user: AppUser) => void;
   onSwitchToRegister: () => void;
 }) {
   const [email, setEmail] = useState('');
@@ -120,8 +119,8 @@ function LoginForm({ onLogin, onSwitchToRegister }: {
     setError('');
     setBusy(true);
     try {
-      const user = await login(email.trim(), password);
-      onLogin(user, remember);
+      const user = await login(email.trim(), password, remember);
+      onLogin(user);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Unable to sign in. Please try again.');
     } finally {
@@ -200,8 +199,7 @@ type RegStep = 'details' | 'otp' | 'password';
 
 interface Details { name: string; studentId: string; email: string; }
 
-function RegisterForm({ users, onRegister, onSwitchToLogin }: {
-  users: AppUser[];
+function RegisterForm({ onRegister, onSwitchToLogin }: {
   onRegister: (user: AppUser) => void;
   onSwitchToLogin: () => void;
 }) {
@@ -245,8 +243,6 @@ function RegisterForm({ users, onRegister, onSwitchToLogin }: {
     if (!details.name.trim()) errors.name = 'Full name is required.';
     if (!details.studentId.trim()) errors.studentId = 'Student ID is required.';
     if (!details.email.trim()) errors.email = 'Email is required.';
-    else if (users.some(u => u.email.toLowerCase() === details.email.trim().toLowerCase()))
-      errors.email = 'An account with this email already exists.';
     setDetailErrors(errors);
     if (Object.keys(errors).length > 0) return;
     generateAndSendOtp();

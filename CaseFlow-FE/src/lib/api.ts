@@ -19,11 +19,60 @@ export class ApiError extends Error {
   }
 }
 
+// ---- Token storage ----
+// "Remember me" -> localStorage (survives browser restart); otherwise sessionStorage
+// (cleared when the tab closes). Never both at once.
+const TOKEN_KEY = 'caseflow.token';
+
+function getStoredToken(): string | null {
+  return sessionStorage.getItem(TOKEN_KEY) ?? localStorage.getItem(TOKEN_KEY);
+}
+
+export function hasStoredToken(): boolean {
+  return getStoredToken() !== null;
+}
+
+function storeToken(token: string, remember: boolean): void {
+  if (remember) {
+    localStorage.setItem(TOKEN_KEY, token);
+    sessionStorage.removeItem(TOKEN_KEY);
+  } else {
+    sessionStorage.setItem(TOKEN_KEY, token);
+    localStorage.removeItem(TOKEN_KEY);
+  }
+}
+
+function clearToken(): void {
+  sessionStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+export function logout(): void {
+  clearToken();
+}
+
+// Called by App.tsx so an expired/invalid token bounces the user back to the login screen
+// the moment any authenticated request comes back 401, rather than only on next reload.
+let onUnauthorized: (() => void) | null = null;
+export function setUnauthorizedHandler(handler: () => void): void {
+  onUnauthorized = handler;
+}
+
+function authHeader(): Record<string, string> {
+  const token = getStoredToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+    headers: { 'Content-Type': 'application/json', ...authHeader(), ...options.headers },
   });
+
+  if (res.status === 401 && path !== '/auth/login') {
+    clearToken();
+    onUnauthorized?.();
+  }
 
   if (!res.ok) {
     let message = res.statusText;
@@ -62,6 +111,11 @@ interface AuditEntryDto {
   action: string;
   by: string;
   timestamp: string;
+}
+
+interface AuthDto {
+  token: string;
+  user: UserDto;
 }
 
 interface CaseDto {
@@ -141,8 +195,13 @@ function mapCase(dto: CaseDto): DisciplinaryCase {
 }
 
 // ---- Auth ----
-export async function login(email: string, password: string): Promise<AppUser> {
-  return mapUser(await request<UserDto>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }));
+export async function login(email: string, password: string, remember: boolean): Promise<AppUser> {
+  const { token, user } = await request<AuthDto>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password, remember }),
+  });
+  storeToken(token, remember);
+  return mapUser(user);
 }
 
 export async function register(payload: {
@@ -151,7 +210,13 @@ export async function register(payload: {
   email: string;
   password: string;
 }): Promise<AppUser> {
-  return mapUser(await request<UserDto>('/auth/register', { method: 'POST', body: JSON.stringify(payload) }));
+  const { token, user } = await request<AuthDto>('/auth/register', { method: 'POST', body: JSON.stringify(payload) });
+  storeToken(token, false);
+  return mapUser(user);
+}
+
+export async function fetchCurrentUser(): Promise<AppUser> {
+  return mapUser(await request<UserDto>('/auth/me'));
 }
 
 // ---- Users ----
@@ -216,7 +281,11 @@ export async function uploadEvidence(caseId: string, files: File[], by?: string)
   files.forEach(file => body.append('files', file));
   if (by) body.append('by', by);
 
-  const res = await fetch(`${API_BASE_URL}/cases/${caseId}/evidence`, { method: 'POST', body });
+  const res = await fetch(`${API_BASE_URL}/cases/${caseId}/evidence`, { method: 'POST', headers: authHeader(), body });
+  if (res.status === 401) {
+    clearToken();
+    onUnauthorized?.();
+  }
   if (!res.ok) {
     let message = res.statusText;
     try {
