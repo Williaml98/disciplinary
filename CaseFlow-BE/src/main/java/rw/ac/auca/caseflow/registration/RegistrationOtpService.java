@@ -35,9 +35,7 @@ public class RegistrationOtpService {
         }
         String code = String.format("%06d", random.nextInt(1_000_000));
         pending.put(key, new Entry(code, Instant.now().plus(CODE_TTL), Instant.now()));
-        emailService.send(email, "Your CaseFlow verification code",
-                "Your verification code is " + code + ". It expires in 10 minutes.\n\n"
-                        + "If you didn't request this, you can safely ignore this email.");
+        emailService.sendOtpCode(email, code);
     }
 
     public void verifyCode(String email, String code) {
