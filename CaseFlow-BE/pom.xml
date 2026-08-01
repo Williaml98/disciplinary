@@ -87,6 +87,16 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
       </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!-- Mockito's bundled Byte Buddy doesn't yet officially support very new JDKs
+               (e.g. running tests under Java 26 while the project targets 21); this opts
+               into Byte Buddy's experimental support rather than failing class mocking. -->
+          <argLine>-Dnet.bytebuddy.experimental=true</argLine>
+        </configuration>
+      </plugin>
     </plugins>
   </build>
 </project>

@@ -19,6 +19,12 @@ Postgres runs on `5434` (not the default `5432`) to avoid clashing with any othe
 
 Tests do **not** need Postgres/Docker running — `./mvnw test` uses an in-memory H2 database configured in `src/test/resources/application.yml`, which overrides the main config on the test classpath.
 
+### Test suite
+
+`OtpServiceTest`/`JwtServiceTest` are plain unit tests (no Spring context). `AuthControllerTest`, `CaseControllerAuthorizationTest`, and `UserControllerAuthorizationTest` are full-context `MockMvc` integration tests (real security filter chain, H2-backed) that share setup via `AbstractApiTest`; each test method runs in its own transaction that's rolled back afterward, so tests never see each other's data. `OtpService` takes an injectable `Clock` (package-private constructor, defaults to `Clock.systemUTC()` via Spring) specifically so `OtpServiceTest` can fast-forward past the 10-minute expiry and 60-second resend cooldown instead of sleeping. `EmailService` is mocked in `AuthControllerTest` (via `@MockitoBean`) to capture the OTP code passed to it — the real HTTP API never exposes a code, so that's the only way to drive the register/reset flows end-to-end from a test. Coverage includes: OTP attempt-cap/expiry/purpose-isolation, JWT sign/parse/expiry, the full register and forgot-password flows, every `@PreAuthorize` role gate, student case-scoping, and the `POST /api/users` bootstrap window.
+
+If tests fail with a Byte Buddy / "Java XX is not supported" error, that's Mockito's inline mock maker not yet officially supporting whatever JDK is running locally — `pom.xml` already sets `-Dnet.bytebuddy.experimental=true` on the surefire plugin to work around it.
+
 ## Authentication
 
 Stateless JWT bearer tokens via Spring Security — no server-side session store. `POST /api/auth/login` and `POST /api/auth/register` return `{ token, user }`; every other endpoint (except the bootstrap window on `POST /api/users` and evidence-photo downloads, see below) requires `Authorization: Bearer <token>`. `GET /api/auth/me` returns the caller's own current record, used by the FE to restore a session from a stored token without re-authenticating.
