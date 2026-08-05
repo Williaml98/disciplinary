@@ -1,9 +1,11 @@
-import { useState } from 'react';
-import { Download, AlertCircle, FileText, FileSpreadsheet } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Download, AlertCircle, FileText, FileSpreadsheet, Eye } from 'lucide-react';
 import { PageHeader } from './DashboardLayout';
 import { OFFENSE_TYPES } from './offenseTypes';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from './ui/table';
 import type { CaseStatus, DecisionType } from './mockData';
-import { downloadCasesReport, ApiError } from '../../lib/api';
+import { downloadCasesReport, previewCasesReport, ApiError } from '../../lib/api';
 
 const NAVY = '#1D3A5F';
 const INPUT_CLS = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3A5F] focus:border-transparent bg-white';
@@ -27,34 +29,101 @@ const EMPTY_FILTERS: Filters = {
   reporterDepartment: '', reportedBy: '',
 };
 
+// Minimal RFC4180-style parser (quoted fields, "" escaping) — enough for the simple,
+// single-line-per-row CSV CaseReportService generates; not a general-purpose CSV parser.
+function parseCsv(text: string): string[][] {
+  return text.trim().split(/\r\n|\n/).map(line => {
+    const cells: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (line[i + 1] === '"') { current += '"'; i++; } else { inQuotes = false; }
+        } else {
+          current += ch;
+        }
+      } else if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ',') {
+        cells.push(current);
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+    cells.push(current);
+    return cells;
+  });
+}
+
 export function ReportsPage() {
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [format, setFormat] = useState<'pdf' | 'csv'>('pdf');
   const [generating, setGenerating] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const [error, setError] = useState('');
+
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewFormat, setPreviewFormat] = useState<'pdf' | 'csv'>('pdf');
+  const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null);
+  const [previewCsvRows, setPreviewCsvRows] = useState<string[][]>([]);
+
+  // Revoke the blob URL whenever it's replaced or the component unmounts, so previewing
+  // several reports in a row doesn't leak memory.
+  useEffect(() => {
+    return () => {
+      if (previewPdfUrl) URL.revokeObjectURL(previewPdfUrl);
+    };
+  }, [previewPdfUrl]);
 
   function update<K extends keyof Filters>(key: K, value: Filters[K]) {
     setFilters(f => ({ ...f, [key]: value }));
+  }
+
+  function buildFilterPayload() {
+    return {
+      format,
+      reportDateFrom: filters.reportDateFrom || undefined,
+      reportDateTo: filters.reportDateTo || undefined,
+      offenseType: filters.offenseType || undefined,
+      status: (filters.status || undefined) as CaseStatus | undefined,
+      decision: (filters.decision || undefined) as DecisionType | undefined,
+      reporterDepartment: filters.reporterDepartment || undefined,
+      reportedBy: filters.reportedBy || undefined,
+    };
   }
 
   async function handleGenerate() {
     setError('');
     setGenerating(true);
     try {
-      await downloadCasesReport({
-        format,
-        reportDateFrom: filters.reportDateFrom || undefined,
-        reportDateTo: filters.reportDateTo || undefined,
-        offenseType: filters.offenseType || undefined,
-        status: (filters.status || undefined) as CaseStatus | undefined,
-        decision: (filters.decision || undefined) as DecisionType | undefined,
-        reporterDepartment: filters.reporterDepartment || undefined,
-        reportedBy: filters.reportedBy || undefined,
-      });
+      await downloadCasesReport(buildFilterPayload());
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Unable to generate the report. Please try again.');
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function handlePreview() {
+    setError('');
+    setPreviewing(true);
+    try {
+      const blob = await previewCasesReport(buildFilterPayload());
+      if (format === 'pdf') {
+        if (previewPdfUrl) URL.revokeObjectURL(previewPdfUrl);
+        setPreviewPdfUrl(URL.createObjectURL(blob));
+      } else {
+        setPreviewCsvRows(parseCsv(await blob.text()));
+      }
+      setPreviewFormat(format);
+      setPreviewOpen(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Unable to preview the report. Please try again.');
+    } finally {
+      setPreviewing(false);
     }
   }
 
@@ -137,13 +206,65 @@ export function ReportsPage() {
             </div>
           )}
 
-          <button type="button" onClick={handleGenerate} disabled={generating}
-            className="w-full flex items-center justify-center gap-2 text-white rounded-xl py-3 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
-            style={{ backgroundColor: NAVY }}>
-            <Download size={15} /> {generating ? 'Generating…' : 'Generate Report'}
-          </button>
+          <div className="flex gap-3">
+            <button type="button" onClick={handlePreview} disabled={previewing}
+              className="flex-1 flex items-center justify-center gap-2 border border-gray-300 text-gray-700 rounded-xl py-3 text-sm font-medium hover:bg-gray-50 disabled:opacity-60 transition-colors">
+              <Eye size={15} /> {previewing ? 'Loading…' : 'Preview'}
+            </button>
+            <button type="button" onClick={handleGenerate} disabled={generating}
+              className="flex-1 flex items-center justify-center gap-2 text-white rounded-xl py-3 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
+              style={{ backgroundColor: NAVY }}>
+              <Download size={15} /> {generating ? 'Generating…' : 'Generate Report'}
+            </button>
+          </div>
         </div>
       </div>
+
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Report Preview</DialogTitle>
+            <DialogDescription>
+              {previewFormat === 'pdf'
+                ? 'This is exactly what the downloaded PDF will look like.'
+                : `${Math.max(previewCsvRows.length - 1, 0)} case(s) will be included in the CSV.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          {previewFormat === 'pdf' ? (
+            previewPdfUrl && (
+              <iframe src={previewPdfUrl} title="Report preview" className="w-full flex-1 min-h-[60vh] border border-gray-200 rounded-lg" />
+            )
+          ) : (
+            <div className="flex-1 overflow-auto border border-gray-200 rounded-lg">
+              <Table>
+                {previewCsvRows.length > 0 && (
+                  <TableHeader>
+                    <TableRow>
+                      {previewCsvRows[0].map((header, i) => <TableHead key={i}>{header}</TableHead>)}
+                    </TableRow>
+                  </TableHeader>
+                )}
+                <TableBody>
+                  {previewCsvRows.slice(1).map((row, i) => (
+                    <TableRow key={i}>
+                      {row.map((cell, j) => <TableCell key={j}>{cell}</TableCell>)}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+
+          <DialogFooter>
+            <button type="button" onClick={handleGenerate} disabled={generating}
+              className="flex items-center justify-center gap-2 text-white rounded-xl px-5 py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
+              style={{ backgroundColor: NAVY }}>
+              <Download size={15} /> {generating ? 'Generating…' : 'Download'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

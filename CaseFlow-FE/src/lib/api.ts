@@ -368,9 +368,10 @@ export interface CaseReportFilters {
   reportedBy?: string;
 }
 
-// Bypasses request() like uploadEvidence() does: this returns a downloadable file, not JSON, so
-// it needs the auth header attached directly and triggers a client-side file save via a Blob URL.
-export async function downloadCasesReport(filters: CaseReportFilters): Promise<void> {
+// Bypasses request() like uploadEvidence() does: this returns a file, not JSON, so it needs the
+// auth header attached directly. Shared by downloadCasesReport() (saves it) and
+// previewCasesReport() (renders it in-app without ever touching disk).
+async function fetchCasesReportBlob(filters: CaseReportFilters): Promise<{ blob: Blob; filename: string }> {
   const query = new URLSearchParams();
   Object.entries(filters).forEach(([key, value]) => {
     if (value !== undefined && value !== '') query.set(key, String(value));
@@ -396,11 +397,20 @@ export async function downloadCasesReport(filters: CaseReportFilters): Promise<v
   const disposition = res.headers.get('Content-Disposition') ?? '';
   const filenameMatch = disposition.match(/filename="?([^";]+)"?/);
   const filename = filenameMatch ? filenameMatch[1] : `caseflow-report.${filters.format}`;
+  return { blob, filename };
+}
 
+export async function downloadCasesReport(filters: CaseReportFilters): Promise<void> {
+  const { blob, filename } = await fetchCasesReportBlob(filters);
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+export async function previewCasesReport(filters: CaseReportFilters): Promise<Blob> {
+  const { blob } = await fetchCasesReportBlob(filters);
+  return blob;
 }
