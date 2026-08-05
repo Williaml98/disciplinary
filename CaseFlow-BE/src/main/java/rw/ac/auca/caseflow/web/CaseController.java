@@ -6,6 +6,8 @@ import java.time.LocalDate;
 import java.time.Year;
 import java.util.List;
 import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.MediaTypeFactory;
@@ -33,6 +35,9 @@ import rw.ac.auca.caseflow.domain.Role;
 import rw.ac.auca.caseflow.email.EmailService;
 import rw.ac.auca.caseflow.repository.CaseRepository;
 import rw.ac.auca.caseflow.repository.UserRepository;
+import rw.ac.auca.caseflow.reporting.CaseReportService;
+import rw.ac.auca.caseflow.reporting.CaseSpecifications;
+import rw.ac.auca.caseflow.reporting.CaseSpecifications.CaseReportFilters;
 import rw.ac.auca.caseflow.security.AuthenticatedUser;
 import rw.ac.auca.caseflow.storage.EvidenceStorage;
 import rw.ac.auca.caseflow.web.dto.AppealRequest;
@@ -52,13 +57,15 @@ public class CaseController {
     private final UserRepository userRepository;
     private final EmailService emailService;
     private final EvidenceStorage evidenceStorage;
+    private final CaseReportService caseReportService;
 
     public CaseController(CaseRepository caseRepository, UserRepository userRepository, EmailService emailService,
-                           EvidenceStorage evidenceStorage) {
+                           EvidenceStorage evidenceStorage, CaseReportService caseReportService) {
         this.caseRepository = caseRepository;
         this.userRepository = userRepository;
         this.emailService = emailService;
         this.evidenceStorage = evidenceStorage;
+        this.caseReportService = caseReportService;
     }
 
     @GetMapping
@@ -74,6 +81,43 @@ public class CaseController {
         DisciplinaryCase disciplinaryCase = findOrThrow(id);
         requireCaseAccess(disciplinaryCase, caller);
         return CaseResponse.from(disciplinaryCase);
+    }
+
+    @GetMapping("/report")
+    @PreAuthorize("hasAnyRole('LECTURER','COMMITTEE','ADMIN')")
+    public ResponseEntity<byte[]> generateReport(
+            @RequestParam(defaultValue = "pdf") String format,
+            @RequestParam(required = false) LocalDate reportDateFrom,
+            @RequestParam(required = false) LocalDate reportDateTo,
+            @RequestParam(required = false) String offenseType,
+            @RequestParam(required = false) CaseStatus status,
+            @RequestParam(required = false) DecisionType decision,
+            @RequestParam(required = false) String reporterDepartment,
+            @RequestParam(required = false) String reportedBy) {
+        CaseReportFilters filters = new CaseReportFilters(
+                reportDateFrom, reportDateTo, offenseType, status, decision, reporterDepartment, reportedBy);
+        List<DisciplinaryCase> cases = caseRepository.findAll(CaseSpecifications.matching(filters));
+
+        byte[] body;
+        MediaType contentType;
+        String filename;
+        if ("csv".equalsIgnoreCase(format)) {
+            body = caseReportService.generateCsv(cases);
+            contentType = MediaType.parseMediaType("text/csv");
+            filename = "caseflow-report-" + LocalDate.now() + ".csv";
+        } else if ("pdf".equalsIgnoreCase(format)) {
+            body = caseReportService.generatePdf(cases, filters);
+            contentType = MediaType.APPLICATION_PDF;
+            filename = "caseflow-report-" + LocalDate.now() + ".pdf";
+        } else {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "format must be 'pdf' or 'csv'");
+        }
+
+        return ResponseEntity.ok()
+                .contentType(contentType)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(filename).build().toString())
+                .body(body);
     }
 
     @PostMapping

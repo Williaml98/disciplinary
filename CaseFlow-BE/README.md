@@ -81,6 +81,7 @@ Config is read from environment variables (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERN
 | `POST /api/cases/{id}/appeal` | Student (own case) | Submit an appeal |
 | `POST /api/cases/{id}/appeal/resolution` | Committee | Resolve an appeal (`Overturned` → case `Resolved` + registration reactivated; `Upheld` → stays `Decided`); emails the student |
 | `POST /api/cases/{id}/reintegration` | Committee | Approve re-integration after a suspension ends (`Resolved` + registration reactivated); emails the student |
+| `GET /api/cases/report` | Lecturer/Committee/Admin | Generate a filtered case export. Query params: `format` (`pdf`\|`csv`, default `pdf`), `reportDateFrom`, `reportDateTo`, `offenseType`, `status`, `decision`, `reporterDepartment`, `reportedBy` (all optional, AND'ed together) |
 
 Passwords are hashed with BCrypt.
 
@@ -92,5 +93,6 @@ Passwords are hashed with BCrypt.
 - `otp/OtpService.java` — in-memory, purpose-keyed one-time codes shared by self-registration and forgot-password (send/verify/consume); see "Authentication" above.
 - `web/` — REST controllers (`AuthController`, `UserController`, `CaseController`) and their request/response DTOs under `web/dto/`.
 - `email/EmailService.java` — thin wrapper over `JavaMailSender`; swallows and logs send failures rather than throwing, so a broken SMTP config never breaks the underlying case/user action.
+- `reporting/` — `CaseSpecifications` builds a dynamic, AND'ed `Specification<DisciplinaryCase>` from whichever `GET /api/cases/report` filters were supplied (`CaseRepository` extends `JpaSpecificationExecutor` for this); `CaseReportService` renders the matched cases as a branded PDF (OpenPDF) or CSV (Commons CSV).
 - `storage/EvidenceStorage.java` — stores uploaded evidence photos on the local filesystem under `caseflow.uploads.dir` (default `./uploads/{caseId}/{uuid}.{ext}`, gitignored). Filenames are always server-generated from a UUID plus an extension derived from the validated content type — neither upload nor download ever trusts a client-supplied filename or path segment.
 - `docker-compose.yml` — Postgres + Mailpit services used for local dev; not used by tests.
