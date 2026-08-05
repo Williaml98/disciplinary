@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Inbox, MessageSquare, CheckCircle, Search, UserCheck, ChevronRight, Send, AlertTriangle, Scale } from 'lucide-react';
+import { Inbox, MessageSquare, CheckCircle, Search, UserCheck, ChevronRight, Send, AlertTriangle, Scale, BarChart3 } from 'lucide-react';
 import { DashboardLayout, PageHeader, StatusBadge, EvidenceGallery } from './DashboardLayout';
 import { DisciplinaryRulesPage } from './DisciplinaryRulesPage';
+import { ReportsPage } from './ReportsPage';
 import type { AppUser, DisciplinaryCase, DecisionType } from './mockData';
 import {
   addCaseNote,
@@ -119,6 +120,7 @@ export function CommitteeDashboard({ user, cases, setCases, onLogout, onUpdatePr
     { id: 'all', label: 'All Cases', icon: <CheckCircle size={16} /> },
     { id: 'reintegration', label: 'Re-integration', icon: <UserCheck size={16} /> },
     { id: 'rules', label: 'Disciplinary Rules', icon: <Scale size={16} /> },
+    { id: 'reports', label: 'Reports', icon: <BarChart3 size={16} /> },
   ];
 
   return (
@@ -241,6 +243,7 @@ export function CommitteeDashboard({ user, cases, setCases, onLogout, onUpdatePr
       )}
 
       {activeNav === 'rules' && <DisciplinaryRulesPage />}
+      {activeNav === 'reports' && <ReportsPage />}
     </DashboardLayout>
   );
 }

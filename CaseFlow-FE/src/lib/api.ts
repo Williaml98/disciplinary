@@ -356,3 +356,51 @@ export async function approveReintegration(caseId: string, by: string): Promise<
     await request<CaseDto>(`/cases/${caseId}/reintegration`, { method: 'POST', body: JSON.stringify({ by }) }),
   );
 }
+
+export interface CaseReportFilters {
+  format: 'pdf' | 'csv';
+  reportDateFrom?: string;
+  reportDateTo?: string;
+  offenseType?: string;
+  status?: CaseStatus;
+  decision?: DecisionType;
+  reporterDepartment?: string;
+  reportedBy?: string;
+}
+
+// Bypasses request() like uploadEvidence() does: this returns a downloadable file, not JSON, so
+// it needs the auth header attached directly and triggers a client-side file save via a Blob URL.
+export async function downloadCasesReport(filters: CaseReportFilters): Promise<void> {
+  const query = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== '') query.set(key, String(value));
+  });
+
+  const res = await fetch(`${API_BASE_URL}/cases/report?${query.toString()}`, { headers: authHeader() });
+  if (res.status === 401) {
+    clearToken();
+    onUnauthorized?.();
+  }
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const body = await res.json();
+      if (body?.message) message = body.message;
+    } catch {
+      // response had no JSON body
+    }
+    throw new ApiError(res.status, message);
+  }
+
+  const blob = await res.blob();
+  const disposition = res.headers.get('Content-Disposition') ?? '';
+  const filenameMatch = disposition.match(/filename="?([^";]+)"?/);
+  const filename = filenameMatch ? filenameMatch[1] : `caseflow-report.${filters.format}`;
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { LayoutDashboard, AlertTriangle, List, Clock, Search, ChevronRight, Bell, UserCog, Plus, Eye, EyeOff, CheckCircle, AlertCircle, BookOpen, Users, GraduationCap, Settings, Pencil, X, Scale } from 'lucide-react';
+import { LayoutDashboard, AlertTriangle, List, Clock, Search, ChevronRight, Bell, UserCog, Plus, Eye, EyeOff, CheckCircle, AlertCircle, BookOpen, Users, GraduationCap, Settings, Pencil, X, Scale, BarChart3 } from 'lucide-react';
 import { DashboardLayout, PageHeader, StatusBadge, EvidenceGallery } from './DashboardLayout';
 import { DisciplinaryRulesPage } from './DisciplinaryRulesPage';
+import { ReportsPage } from './ReportsPage';
 import type { AppUser, DisciplinaryCase, Role } from './mockData';
 import { fetchUsers, createUser, updateUserRole, deleteUser as apiDeleteUser, ApiError } from '../../lib/api';
 
@@ -96,6 +97,7 @@ export function AdminDashboard({ user, cases, onLogout, onUpdateProfile }: Props
     { id: 'users', label: 'User Management', icon: <UserCog size={16} /> },
     { id: 'audit', label: 'Audit Log', icon: <Clock size={16} /> },
     { id: 'rules', label: 'Disciplinary Rules', icon: <Scale size={16} /> },
+    { id: 'reports', label: 'Reports', icon: <BarChart3 size={16} /> },
   ];
 
   return (
@@ -313,6 +315,7 @@ export function AdminDashboard({ user, cases, onLogout, onUpdateProfile }: Props
       )}
 
       {activeNav === 'rules' && <DisciplinaryRulesPage />}
+      {activeNav === 'reports' && <ReportsPage />}
     </DashboardLayout>
   );
 }
