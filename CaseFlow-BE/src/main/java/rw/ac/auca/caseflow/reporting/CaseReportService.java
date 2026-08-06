@@ -23,6 +23,7 @@ import java.util.List;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 import org.springframework.stereotype.Service;
+import rw.ac.auca.caseflow.domain.AppealStatus;
 import rw.ac.auca.caseflow.domain.DisciplinaryCase;
 import rw.ac.auca.caseflow.reporting.CaseSpecifications.CaseReportFilters;
 
@@ -85,6 +86,79 @@ public class CaseReportService {
         PdfPCell cell = new PdfPCell(new Phrase(text == null ? "" : text, font));
         cell.setPadding(5);
         table.addCell(cell);
+    }
+
+    // Single-case certificate for a student whose case ended in their favor — see
+    // CaseController.downloadClearanceCertificate for the "cleared" eligibility check.
+    public byte[] generateClearanceCertificate(DisciplinaryCase disciplinaryCase) {
+        Document document = new Document(PageSize.A4, 54, 54, 54, 54);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try {
+            PdfWriter.getInstance(document, out);
+            document.open();
+
+            Font titleFont = new Font(Font.HELVETICA, 20, Font.BOLD, NAVY);
+            document.add(new Paragraph("Certificate of Clearance", titleFont));
+
+            Font metaFont = new Font(Font.HELVETICA, 9, Font.NORMAL, LIGHT_GRAY);
+            document.add(new Paragraph(
+                    "Issued " + TIMESTAMP_FORMAT.format(Instant.now()) + " UTC · AUCA Disciplinary Committee", metaFont));
+            document.add(Chunk.NEWLINE);
+            document.add(Chunk.NEWLINE);
+
+            Font bodyFont = new Font(Font.HELVETICA, 11, Font.NORMAL, Color.DARK_GRAY);
+            Font boldBodyFont = new Font(Font.HELVETICA, 11, Font.BOLD, Color.DARK_GRAY);
+
+            Paragraph intro = new Paragraph();
+            intro.setLeading(18);
+            intro.add(new Chunk("This certifies that ", bodyFont));
+            intro.add(new Chunk(disciplinaryCase.getStudentName(), boldBodyFont));
+            intro.add(new Chunk(" (Student ID: ", bodyFont));
+            intro.add(new Chunk(disciplinaryCase.getStudentId(), boldBodyFont));
+            intro.add(new Chunk(") has been cleared of the disciplinary charge recorded under case ", bodyFont));
+            intro.add(new Chunk(disciplinaryCase.getId(), boldBodyFont));
+            intro.add(new Chunk(" (" + disciplinaryCase.getOffenseType() + "), reported "
+                    + disciplinaryCase.getReportDate() + ".", bodyFont));
+            document.add(intro);
+            document.add(Chunk.NEWLINE);
+
+            Paragraph basis = new Paragraph(basisStatement(disciplinaryCase), bodyFont);
+            basis.setLeading(18);
+            document.add(basis);
+            document.add(Chunk.NEWLINE);
+
+            Paragraph closing = new Paragraph(
+                    "No disciplinary sanction stands against the student in relation to this case, "
+                            + "and their registration status is unrestricted.", bodyFont);
+            closing.setLeading(18);
+            document.add(closing);
+            document.add(Chunk.NEWLINE);
+            document.add(Chunk.NEWLINE);
+
+            Font signOffFont = new Font(Font.HELVETICA, 11, Font.ITALIC, Color.DARK_GRAY);
+            document.add(new Paragraph("AUCA Disciplinary Committee", signOffFont));
+
+            document.add(Chunk.NEWLINE);
+            document.add(Chunk.NEWLINE);
+            Font footerFont = new Font(Font.HELVETICA, 8, Font.NORMAL, LIGHT_GRAY);
+            document.add(new Paragraph(
+                    "This certificate is generated directly from CaseFlow case records and reflects the "
+                            + "system's state as of the issue date above.", footerFont));
+        } catch (DocumentException e) {
+            throw new IllegalStateException("Failed to generate clearance certificate", e);
+        } finally {
+            document.close();
+        }
+        return out.toByteArray();
+    }
+
+    private static String basisStatement(DisciplinaryCase disciplinaryCase) {
+        if (disciplinaryCase.getAppealStatus() == AppealStatus.OVERTURNED) {
+            return "The committee's original decision on this case was overturned on appeal, "
+                    + "and the matter was resolved fully in the student's favor.";
+        }
+        return "The Disciplinary Committee reviewed this case on " + disciplinaryCase.getDecisionDate()
+                + " and recorded a decision of Cleared, finding no basis for disciplinary action.";
     }
 
     public byte[] generateCsv(List<DisciplinaryCase> cases) {

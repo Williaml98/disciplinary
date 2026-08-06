@@ -120,6 +120,25 @@ public class CaseController {
                 .body(body);
     }
 
+    @GetMapping("/{id}/clearance-certificate")
+    public ResponseEntity<byte[]> downloadClearanceCertificate(@PathVariable String id,
+                                                                 @AuthenticationPrincipal AuthenticatedUser caller) {
+        DisciplinaryCase disciplinaryCase = findOrThrow(id);
+        requireCaseAccess(disciplinaryCase, caller);
+        boolean cleared = disciplinaryCase.getDecision() == DecisionType.CLEARED
+                || disciplinaryCase.getAppealStatus() == AppealStatus.OVERTURNED;
+        if (!cleared) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "This case has not been cleared");
+        }
+
+        byte[] pdf = caseReportService.generateClearanceCertificate(disciplinaryCase);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename("clearance-" + id + ".pdf").build().toString())
+                .body(pdf);
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('LECTURER','ADMIN')")
