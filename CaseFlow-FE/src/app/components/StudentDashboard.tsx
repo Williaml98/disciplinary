@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Eye, MessageSquare, CheckCircle, Clock, AlertCircle, FileText, Scale } from 'lucide-react';
+import { Eye, MessageSquare, CheckCircle, Clock, AlertCircle, FileText, Scale, ShieldCheck, Download } from 'lucide-react';
 import { DashboardLayout, PageHeader, StatusBadge } from './DashboardLayout';
 import { DisciplinaryRulesPage } from './DisciplinaryRulesPage';
 import type { AppUser, DisciplinaryCase, CaseStatus } from './mockData';
-import { submitAppeal as apiSubmitAppeal, ApiError } from '../../lib/api';
+import { submitAppeal as apiSubmitAppeal, downloadClearanceCertificate, ApiError } from '../../lib/api';
 
 interface Props {
   user: AppUser;
@@ -41,8 +41,24 @@ export function StudentDashboard({ user, cases, setCases, onLogout, onUpdateProf
   const [appealSubmitted, setAppealSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [downloadingCert, setDownloadingCert] = useState(false);
+  const [certError, setCertError] = useState('');
 
   const myCase = cases.find(c => c.studentId === user.studentId);
+  const isCleared = !!myCase && (myCase.decision === 'Cleared' || myCase.appealStatus === 'Overturned');
+
+  async function handleDownloadCertificate() {
+    if (!myCase) return;
+    setCertError('');
+    setDownloadingCert(true);
+    try {
+      await downloadClearanceCertificate(myCase.id);
+    } catch (err) {
+      setCertError(err instanceof ApiError ? err.message : 'Unable to download certificate. Please try again.');
+    } finally {
+      setDownloadingCert(false);
+    }
+  }
 
   const navItems = [
     { id: 'status', label: 'My Case Status', icon: <Eye size={16} /> },
@@ -97,6 +113,34 @@ export function StudentDashboard({ user, cases, setCases, onLogout, onUpdateProf
                   </div>
                   <p className="text-sm text-gray-700 leading-relaxed">{stepDescriptions[myCase.status]}</p>
                 </div>
+
+                {/* Clearance banner */}
+                {isCleared && (
+                  <div className="bg-green-50 border border-green-200 rounded-2xl p-5">
+                    <div className="flex items-start gap-3">
+                      <ShieldCheck size={22} className="text-green-600 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-green-800 mb-1">You've been cleared of these charges</p>
+                        <p className="text-sm text-green-700 mb-3">
+                          {myCase.decision === 'Cleared'
+                            ? 'The committee reviewed your case and found no basis for disciplinary action.'
+                            : 'Your appeal was successful and the original decision was overturned.'}
+                          {' '}You can download an official certificate confirming this for your records.
+                        </p>
+                        {certError && (
+                          <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
+                            <AlertCircle size={13} className="shrink-0" />
+                            <p className="text-xs">{certError}</p>
+                          </div>
+                        )}
+                        <button type="button" onClick={handleDownloadCertificate} disabled={downloadingCert}
+                          className="flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors">
+                          <Download size={14} /> {downloadingCert ? 'Preparing…' : 'Download Clearance Certificate'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Progress timeline */}
                 <div className="bg-white rounded-2xl border border-gray-200 p-6">
