@@ -3,8 +3,11 @@ target/
 # Env
 .env
 
-# Uploaded evidence files (local dev storage, never committed)
+# Uploaded evidence files and avatars (local dev storage, never committed)
 uploads/
+
+# Where the test profile writes its uploads (caseflow.uploads.dir in src/test/resources)
+build/
 
 # Editor / OS
 .DS_Store

@@ -10,6 +10,11 @@ public record CreateUserRequest(
         String department,
         String studentId,
         @NotBlank String email,
-        @NotBlank String password
+        /**
+         * Optional, and ignored entirely when an admin creates the account — the backend generates a
+         * temporary password and emails it instead. Only the zero-users bootstrap path reads this, and
+         * it enforces its own presence check (see UserController.createUser).
+         */
+        String password
 ) {
 }

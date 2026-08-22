@@ -9,7 +9,14 @@ public record UserResponse(
         Role role,
         String department,
         String studentId,
-        String email
+        String email,
+        boolean active,
+        boolean mustChangePassword,
+        /**
+         * Relative path, not a bare filename — the frontend prefixes it with API_BASE_URL, matching how
+         * CaseResponse exposes evidence files. Null when the user has no avatar.
+         */
+        String profilePictureUrl
 ) {
     public static UserResponse from(AppUser user) {
         return new UserResponse(
@@ -18,7 +25,12 @@ public record UserResponse(
                 user.getRole(),
                 user.getDepartment(),
                 user.getStudentId(),
-                user.getEmail()
+                user.getEmail(),
+                user.isActive(),
+                user.isMustChangePassword(),
+                user.getProfilePicture() == null
+                        ? null
+                        : "/users/" + user.getId() + "/picture/" + user.getProfilePicture()
         );
     }
 }

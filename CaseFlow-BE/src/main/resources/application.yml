@@ -10,6 +10,18 @@ spring:
     hibernate:
       ddl-auto: update
     open-in-view: false
+    properties:
+      hibernate:
+        # DisciplinaryCase eagerly loads notes, auditTrail and evidenceFiles (see the comment on those
+        # fields). Without batching that costs 3 extra selects per case on every list query; with it,
+        # each collection role is loaded for the whole page in one IN-clause round trip. Keep this at or
+        # above spring.data.web.pageable.max-page-size or paged reads fall back to per-row selects.
+        default_batch_fetch_size: 100
+  data:
+    web:
+      pageable:
+        default-page-size: 20
+        max-page-size: 100
   mail:
     host: ${SMTP_HOST:localhost}
     port: ${SMTP_PORT:1025}
@@ -27,6 +39,9 @@ spring:
       max-request-size: 40MB
 
 caseflow:
+  # Where the frontend is reachable. Used only to build the call-to-action links in outgoing emails,
+  # so point it at the deployed frontend origin (not the API) in anything beyond local dev.
+  app-url: ${CASEFLOW_APP_URL:http://localhost:5173}
   mail:
     from: ${SMTP_FROM:noreply@auca.ac.rw}
   uploads:
