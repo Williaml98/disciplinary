@@ -4,12 +4,23 @@ import { LecturerDashboard } from './components/LecturerDashboard';
 import { CommitteeDashboard } from './components/CommitteeDashboard';
 import { StudentDashboard } from './components/StudentDashboard';
 import { AdminDashboard } from './components/AdminDashboard';
-import type { AppUser, DisciplinaryCase } from './components/mockData';
-import { fetchCases, fetchCurrentUser, hasStoredToken, logout, setUnauthorizedHandler, ApiError } from '../lib/api';
+import { ForcePasswordChange } from './components/ForcePasswordChange';
+import type { AppUser } from './components/mockData';
+import { fetchCurrentUser, hasStoredToken, logout, setUnauthorizedHandler, ApiError } from '../lib/api';
+import { Toaster } from './components/ui/sonner';
 
 export default function App() {
+  return (
+    <>
+      <AppScreens />
+      {/* Mounted outside the screen switch so a toast fired during a screen change still lands. */}
+      <Toaster />
+    </>
+  );
+}
+
+function AppScreens() {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
-  const [cases, setCases] = useState<DisciplinaryCase[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
@@ -18,14 +29,15 @@ export default function App() {
     restoreSession();
   }, []);
 
+  // Cases are no longer fetched here. Each dashboard queries the slice it needs through
+  // usePagedCases, because the four roles want disjoint slices (own cases / cases I filed / the review
+  // queue / everything) and no single global fetch serves all of them without being unbounded.
   async function restoreSession() {
     setLoading(true);
     setLoadError('');
     try {
       if (hasStoredToken()) {
-        const user = await fetchCurrentUser();
-        setCurrentUser(user);
-        setCases(await fetchCases());
+        setCurrentUser(await fetchCurrentUser());
       }
     } catch (err) {
       // A 401 here just means the stored token expired — setUnauthorizedHandler already
@@ -40,23 +52,14 @@ export default function App() {
     }
   }
 
-  async function handleLogin(user: AppUser) {
+  function handleLogin(user: AppUser) {
     setLoadError('');
-    try {
-      const fetchedCases = await fetchCases();
-      setCurrentUser(user);
-      setCases(fetchedCases);
-    } catch (err) {
-      setLoadError(
-        err instanceof ApiError ? err.message : 'Could not reach the CaseFlow server. Is the backend running?'
-      );
-    }
+    setCurrentUser(user);
   }
 
   function handleLogout() {
     logout();
     setCurrentUser(null);
-    setCases([]);
   }
 
   function handleUpdateProfile(updated: AppUser) {
@@ -97,9 +100,19 @@ export default function App() {
     );
   }
 
+  // Accounts an admin created start with a generated temporary password that was emailed to the user;
+  // it must be replaced before they reach the app, so this gate comes before the role switch.
+  if (currentUser.mustChangePassword) {
+    return (
+      <ForcePasswordChange
+        user={currentUser}
+        onChanged={handleUpdateProfile}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
   const sharedProps = {
-    cases,
-    setCases,
     onLogout: handleLogout,
     onUpdateProfile: handleUpdateProfile,
   };

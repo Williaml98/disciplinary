@@ -3,26 +3,29 @@ import { Inbox, MessageSquare, CheckCircle, Search, UserCheck, ChevronRight, Sen
 import { DashboardLayout, PageHeader, StatusBadge, EvidenceGallery } from './DashboardLayout';
 import { DisciplinaryRulesPage } from './DisciplinaryRulesPage';
 import { ReportsPage } from './ReportsPage';
-import type { AppUser, DisciplinaryCase, DecisionType } from './mockData';
+import type { AppUser, DisciplinaryCase, DecisionType, CaseStatus } from './mockData';
 import {
   addCaseNote,
   recordDecision as apiRecordDecision,
   resolveAppeal as apiResolveAppeal,
   approveReintegration as apiApproveReintegration,
-  ApiError,
+  fetchCasesPage,
 } from '../../lib/api';
+import { usePagedCases } from '../../lib/usePagedCases';
+import { useCaseStats } from '../../lib/hooks';
+import { LoadMore } from './Pagination';
+import { StatusChanger } from './StatusChanger';
+import { notifyError, notifySuccess } from '../../lib/toast';
 
 interface Props {
   user: AppUser;
-  cases: DisciplinaryCase[];
-  setCases: React.Dispatch<React.SetStateAction<DisciplinaryCase[]>>;
   onLogout: () => void;
   onUpdateProfile: (updated: AppUser) => void;
 }
 
 const DECISIONS: DecisionType[] = ['Warning', 'Probation', 'Semester Suspension', 'Expulsion', 'Cleared'];
 
-export function CommitteeDashboard({ user, cases, setCases, onLogout, onUpdateProfile }: Props) {
+export function CommitteeDashboard({ user, onLogout, onUpdateProfile }: Props) {
   const [activeNav, setActiveNav] = useState('queue');
   const [selectedCase, setSelectedCase] = useState<DisciplinaryCase | null>(null);
   const [noteText, setNoteText] = useState('');
@@ -33,27 +36,50 @@ export function CommitteeDashboard({ user, cases, setCases, onLogout, onUpdatePr
   const [searchResult, setSearchResult] = useState<DisciplinaryCase[] | null>(null);
   const [appealAction, setAppealAction] = useState<'Upheld' | 'Overturned' | ''>('');
   const [busy, setBusy] = useState(false);
-  const [actionError, setActionError] = useState('');
+  const [searching, setSearching] = useState(false);
 
-  const queueCases = cases.filter(c => c.status === 'Reported' || c.status === 'Under Review');
-  const appealCases = cases.filter(c => c.status === 'Under Appeal');
+  // The list follows whichever tab is open, filtered server-side.
+  const listFilters: { status?: CaseStatus[] } =
+    activeNav === 'queue' ? { status: ['Reported', 'Under Review'] }
+    : activeNav === 'appeals' ? { status: ['Under Appeal'] }
+    : {};
+  // Append mode: this is a 288px-wide triage column, where numbered page controls don't fit and a
+  // scroll-and-load list matches how it's actually worked through.
+  const paged = usePagedCases(listFilters, { size: 25, mode: 'append', sort: 'reportDate,desc' });
 
-  function applyUpdatedCase(updated: DisciplinaryCase) {
-    setCases(prev => prev.map(c => c.id === updated.id ? updated : c));
+  // Badges come from global counts, not the loaded page — otherwise they'd silently show "how many are
+  // on screen" rather than "how many need attention".
+  const stats = useCaseStats();
+  const queueBadge = stats.data ? stats.data.reported + stats.data.underReview : 0;
+  const appealBadge = stats.data?.underAppeal ?? 0;
+
+  function applyUpdatedCase(updated: DisciplinaryCase, statusChanged = false) {
+    paged.replaceItem(updated);
     setSelectedCase(prev => prev && prev.id === updated.id ? updated : prev);
     setSearchResult(prev => prev ? prev.map(c => c.id === updated.id ? updated : c) : prev);
+    // replaceItem alone would leave a just-decided case sitting in a list labelled "Pending Review".
+    // The reload reconciles which cases still belong in the current filter; the stats reload keeps the
+    // badges honest.
+    if (statusChanged) {
+      paged.reload();
+      stats.reload();
+    }
   }
 
   async function addNote() {
     if (!noteText.trim() || !selectedCase) return;
-    setActionError('');
     setBusy(true);
     try {
+      const wasReported = selectedCase.status === 'Reported';
       const updated = await addCaseNote(selectedCase.id, user.name, noteText);
-      applyUpdatedCase(updated);
+      // Adding the first note promotes Reported -> Under Review server-side.
+      applyUpdatedCase(updated, wasReported);
       setNoteText('');
+      // The backend promotes Reported -> Under Review on the first note; say so rather than
+      // letting the badge change on its own.
+      notifySuccess('Note added.', wasReported ? 'This case has moved to Under Review.' : undefined);
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Unable to add note. Please try again.');
+      notifyError(err, 'Unable to add note. Please try again.');
     } finally {
       setBusy(false);
     }
@@ -61,7 +87,6 @@ export function CommitteeDashboard({ user, cases, setCases, onLogout, onUpdatePr
 
   async function recordDecision() {
     if (!decision || !selectedCase) return;
-    setActionError('');
     setBusy(true);
     try {
       const updated = await apiRecordDecision(selectedCase.id, {
@@ -70,12 +95,18 @@ export function CommitteeDashboard({ user, cases, setCases, onLogout, onUpdatePr
         suspensionEnd: suspEnd || undefined,
         by: user.name,
       });
-      applyUpdatedCase(updated);
+      applyUpdatedCase(updated, true);
       setDecision('');
       setSuspStart('');
       setSuspEnd('');
+      notifySuccess(
+        `Decision recorded: ${updated.decision}.`,
+        updated.status === 'Resolved'
+          ? 'The case is now resolved and the student has been notified by email.'
+          : 'The student has been notified by email.',
+      );
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Unable to record decision. Please try again.');
+      notifyError(err, 'Unable to record decision. Please try again.');
     } finally {
       setBusy(false);
     }
@@ -83,40 +114,51 @@ export function CommitteeDashboard({ user, cases, setCases, onLogout, onUpdatePr
 
   async function resolveAppeal() {
     if (!appealAction || !selectedCase) return;
-    setActionError('');
     setBusy(true);
     try {
       const updated = await apiResolveAppeal(selectedCase.id, appealAction, user.name);
-      applyUpdatedCase(updated);
+      applyUpdatedCase(updated, true);
       setAppealAction('');
+      notifySuccess(`Appeal ${appealAction.toLowerCase()}.`, 'The student has been notified by email.');
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Unable to resolve appeal. Please try again.');
+      notifyError(err, 'Unable to resolve appeal. Please try again.');
     } finally {
       setBusy(false);
     }
   }
 
   async function approveReintegration(caseId: string) {
-    setActionError('');
     setBusy(true);
     try {
       const updated = await apiApproveReintegration(caseId, user.name);
-      applyUpdatedCase(updated);
+      applyUpdatedCase(updated, true);
+      notifySuccess(`Re-integration approved for ${updated.studentName}.`,
+        'Their registration status is now Active.');
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Unable to approve re-integration. Please try again.');
+      notifyError(err, 'Unable to approve re-integration. Please try again.');
     } finally {
       setBusy(false);
     }
   }
 
-  function handleSearch() {
-    const results = cases.filter(c => c.studentId === searchId || c.studentName.toLowerCase().includes(searchId.toLowerCase()));
-    setSearchResult(results);
+  async function handleSearch() {
+    if (!searchId.trim()) return;
+    setSearching(true);
+    try {
+      // Server-side now: the client no longer holds every case to filter through. The backend's
+      // `search` predicate already covers student id, name, case id and offense type.
+      const results = await fetchCasesPage({ search: searchId.trim(), size: 20 });
+      setSearchResult(results.content);
+    } catch (err) {
+      notifyError(err, 'Unable to search cases. Please try again.');
+    } finally {
+      setSearching(false);
+    }
   }
 
   const navItems = [
-    { id: 'queue', label: 'Cases Queue', icon: <Inbox size={16} />, badge: queueCases.length },
-    { id: 'appeals', label: 'Appeals Review', icon: <MessageSquare size={16} />, badge: appealCases.length },
+    { id: 'queue', label: 'Cases Queue', icon: <Inbox size={16} />, badge: queueBadge },
+    { id: 'appeals', label: 'Appeals Review', icon: <MessageSquare size={16} />, badge: appealBadge },
     { id: 'all', label: 'All Cases', icon: <CheckCircle size={16} /> },
     { id: 'reintegration', label: 'Re-integration', icon: <UserCheck size={16} /> },
     { id: 'rules', label: 'Disciplinary Rules', icon: <Scale size={16} /> },
@@ -135,7 +177,7 @@ export function CommitteeDashboard({ user, cases, setCases, onLogout, onUpdatePr
               </p>
             </div>
             <div className="flex-1 overflow-y-auto">
-              {(activeNav === 'queue' ? queueCases : activeNav === 'appeals' ? appealCases : cases).map(c => (
+              {paged.items.map(c => (
                 <button
                   key={c.id}
                   onClick={() => setSelectedCase(c)}
@@ -152,9 +194,21 @@ export function CommitteeDashboard({ user, cases, setCases, onLogout, onUpdatePr
                   <p className="text-xs text-gray-400 mt-2">{c.reportDate}</p>
                 </button>
               ))}
-              {(activeNav === 'queue' ? queueCases : activeNav === 'appeals' ? appealCases : cases).length === 0 && (
+              {paged.loading && paged.items.length === 0 && (
+                <div className="p-8 text-center text-gray-400 text-sm">Loading…</div>
+              )}
+              {paged.error && (
+                <div className="p-8 text-center text-red-600 text-sm">{paged.error}</div>
+              )}
+              {!paged.loading && !paged.error && paged.items.length === 0 && (
                 <div className="p-8 text-center text-gray-400 text-sm">No cases in this view.</div>
               )}
+              <LoadMore
+                loaded={paged.items.length}
+                total={paged.totalElements}
+                loading={paged.loading}
+                onLoadMore={paged.loadMore}
+              />
             </div>
           </div>
 
@@ -182,7 +236,8 @@ export function CommitteeDashboard({ user, cases, setCases, onLogout, onUpdatePr
                 setAppealAction={setAppealAction}
                 onResolveAppeal={resolveAppeal}
                 busy={busy}
-                actionError={actionError}
+                actor={user.name}
+                onStatusChanged={updated => applyUpdatedCase(updated, true)}
               />
             ) : (
               <div className="flex items-center justify-center h-full text-gray-400">
@@ -201,12 +256,6 @@ export function CommitteeDashboard({ user, cases, setCases, onLogout, onUpdatePr
           <PageHeader title="Re-integration Verification" subtitle="Confirm a student has served their suspension before clearing them to re-register" />
           <div className="flex-1 overflow-y-auto p-4 sm:p-8">
             <div className="max-w-2xl mx-auto">
-              {actionError && (
-                <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-6">
-                  <AlertTriangle size={15} className="shrink-0" />
-                  <p className="text-sm">{actionError}</p>
-                </div>
-              )}
               <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
                 <p className="text-sm text-gray-700 mb-4">Search by student ID number or name to retrieve their disciplinary record.</p>
                 <div className="flex gap-3">
@@ -218,8 +267,12 @@ export function CommitteeDashboard({ user, cases, setCases, onLogout, onUpdatePr
                     placeholder="Student ID or name..."
                     className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3A5F]"
                   />
-                  <button onClick={handleSearch} className="flex items-center gap-2 bg-[#1D3A5F] hover:bg-[#162d4a] text-white px-4 py-2 rounded-lg text-sm transition-colors">
-                    <Search size={14} /> Search
+                  <button
+                    onClick={handleSearch}
+                    disabled={searching || !searchId.trim()}
+                    className="flex items-center gap-2 bg-[#1D3A5F] hover:bg-[#162d4a] disabled:opacity-60 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                  >
+                    <Search size={14} /> {searching ? 'Searching…' : 'Search'}
                   </button>
                 </div>
               </div>
@@ -251,7 +304,7 @@ export function CommitteeDashboard({ user, cases, setCases, onLogout, onUpdatePr
 function CommitteeCaseDetail({
   c, noteText, setNoteText, onAddNote,
   decision, setDecision, suspStart, setSuspStart, suspEnd, setSuspEnd, onRecordDecision,
-  appealAction, setAppealAction, onResolveAppeal, busy, actionError
+  appealAction, setAppealAction, onResolveAppeal, busy, actor, onStatusChanged
 }: {
   c: DisciplinaryCase;
   noteText: string; setNoteText: (v: string) => void; onAddNote: () => void;
@@ -261,7 +314,9 @@ function CommitteeCaseDetail({
   onRecordDecision: () => void;
   appealAction: 'Upheld' | 'Overturned' | ''; setAppealAction: (v: 'Upheld' | 'Overturned' | '') => void;
   onResolveAppeal: () => void;
-  busy: boolean; actionError: string;
+  busy: boolean;
+  actor: string;
+  onStatusChanged: (updated: DisciplinaryCase) => void;
 }) {
   const needsSuspension = decision === 'Semester Suspension' || decision === 'Expulsion';
   const canDecide = c.status === 'Under Review' || c.status === 'Reported';
@@ -269,12 +324,6 @@ function CommitteeCaseDetail({
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
-      {actionError && (
-        <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-          <AlertTriangle size={15} className="shrink-0" />
-          <p className="text-sm">{actionError}</p>
-        </div>
-      )}
       {/* Header */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6">
         <div className="flex items-start justify-between mb-4">
@@ -421,6 +470,9 @@ function CommitteeCaseDetail({
           )}
         </div>
       )}
+
+      {/* Manual status change — the only path out of "Decided" for a case with no sanction to serve. */}
+      <StatusChanger c={c} actor={actor} onChanged={onStatusChanged} />
 
       {/* Audit trail */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6">

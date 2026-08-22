@@ -1,14 +1,14 @@
 import { useState } from 'react';
-import { Eye, MessageSquare, CheckCircle, Clock, AlertCircle, FileText, Scale, ShieldCheck, Download } from 'lucide-react';
-import { DashboardLayout, PageHeader, StatusBadge } from './DashboardLayout';
+import { Eye, MessageSquare, CheckCircle, Clock, AlertCircle, FileText, Scale, ShieldCheck, Download, ChevronRight } from 'lucide-react';
+import { DashboardLayout, PageHeader, StatusBadge, EvidenceGallery } from './DashboardLayout';
 import { DisciplinaryRulesPage } from './DisciplinaryRulesPage';
-import type { AppUser, DisciplinaryCase, CaseStatus } from './mockData';
-import { submitAppeal as apiSubmitAppeal, downloadClearanceCertificate, ApiError } from '../../lib/api';
+import type { AppUser, CaseStatus } from './mockData';
+import { submitAppeal as apiSubmitAppeal, downloadClearanceCertificate } from '../../lib/api';
+import { usePagedCases } from '../../lib/usePagedCases';
+import { notifyError, notifySuccess } from '../../lib/toast';
 
 interface Props {
   user: AppUser;
-  cases: DisciplinaryCase[];
-  setCases: React.Dispatch<React.SetStateAction<DisciplinaryCase[]>>;
   onLogout: () => void;
   onUpdateProfile: (updated: AppUser) => void;
 }
@@ -35,26 +35,32 @@ const stepDescriptions: Record<CaseStatus, string> = {
   'Resolved': 'Your case has been fully resolved. If you were under suspension, your re-integration has been confirmed.',
 };
 
-export function StudentDashboard({ user, cases, setCases, onLogout, onUpdateProfile }: Props) {
+export function StudentDashboard({ user, onLogout, onUpdateProfile }: Props) {
   const [activeNav, setActiveNav] = useState('status');
   const [appealText, setAppealText] = useState('');
   const [appealSubmitted, setAppealSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState('');
   const [downloadingCert, setDownloadingCert] = useState(false);
-  const [certError, setCertError] = useState('');
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
 
-  const myCase = cases.find(c => c.studentId === user.studentId);
+  // No filter needed: the backend scopes STUDENT callers to their own cases. Newest first, so the
+  // selection below is deterministic — the old `cases.find(...)` returned whichever case happened to
+  // come back first, so a student with two cases saw one of them arbitrarily and could never reach the
+  // other.
+  const paged = usePagedCases({}, { size: 20, sort: 'reportDate,desc' });
+  const myCases = paged.items;
+  const myCase = myCases.find(c => c.id === selectedCaseId) ?? (myCases.length > 0 ? myCases[0] : undefined);
+  const hasMultiple = paged.totalElements > 1;
   const isCleared = !!myCase && (myCase.decision === 'Cleared' || myCase.appealStatus === 'Overturned');
 
   async function handleDownloadCertificate() {
     if (!myCase) return;
-    setCertError('');
     setDownloadingCert(true);
     try {
       await downloadClearanceCertificate(myCase.id);
+      notifySuccess('Clearance certificate downloaded.');
     } catch (err) {
-      setCertError(err instanceof ApiError ? err.message : 'Unable to download certificate. Please try again.');
+      notifyError(err, 'Unable to download certificate. Please try again.');
     } finally {
       setDownloadingCert(false);
     }
@@ -69,15 +75,15 @@ export function StudentDashboard({ user, cases, setCases, onLogout, onUpdateProf
   async function submitAppeal(e: React.FormEvent) {
     e.preventDefault();
     if (!myCase || !appealText.trim()) return;
-    setSubmitError('');
     setSubmitting(true);
     try {
       const updated = await apiSubmitAppeal(myCase.id, appealText);
-      setCases(prev => prev.map(c => c.id === updated.id ? updated : c));
+      paged.replaceItem(updated);
       setAppealSubmitted(true);
       setAppealText('');
+      notifySuccess('Appeal submitted.', 'The committee will review it and notify you by email.');
     } catch (err) {
-      setSubmitError(err instanceof ApiError ? err.message : 'Unable to submit appeal. Please try again.');
+      notifyError(err, 'Unable to submit appeal. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -92,7 +98,14 @@ export function StudentDashboard({ user, cases, setCases, onLogout, onUpdateProf
             subtitle={myCase ? `Case Reference: ${myCase.id}` : 'No active disciplinary case found'}
           />
           <div className="flex-1 overflow-y-auto p-4 sm:p-8">
-            {!myCase ? (
+            {paged.loading && myCases.length === 0 ? (
+              <p className="text-center py-16 text-sm text-gray-400">Loading your case…</p>
+            ) : paged.error ? (
+              <div className="max-w-lg mx-auto flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                <AlertCircle size={15} className="shrink-0" />
+                <p className="text-sm">{paged.error}</p>
+              </div>
+            ) : !myCase ? (
               <div className="max-w-lg mx-auto text-center py-16">
                 <CheckCircle size={48} className="text-green-400 mx-auto mb-4" />
                 <h2 className="text-lg text-gray-900 mb-2">No Active Cases</h2>
@@ -100,6 +113,38 @@ export function StudentDashboard({ user, cases, setCases, onLogout, onUpdateProf
               </div>
             ) : (
               <div className="max-w-2xl mx-auto space-y-5">
+                {/* Only rendered when there's a choice to make — one case stays a single-case view. */}
+                {hasMultiple && (
+                  <div className="bg-white rounded-2xl border border-gray-200 p-4">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                      Your Cases ({paged.totalElements})
+                    </p>
+                    <div className="space-y-2">
+                      {myCases.map(c => (
+                        <button
+                          key={c.id}
+                          onClick={() => setSelectedCaseId(c.id)}
+                          className={`w-full flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${
+                            c.id === myCase.id
+                              ? 'border-[#1D3A5F]/40 bg-[#1D3A5F]/[0.04]'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-mono text-gray-400">{c.id}</p>
+                            <p className="text-sm text-gray-800 truncate">{c.offenseType}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">Reported {c.reportDate}</p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <StatusBadge status={c.status} />
+                            <ChevronRight size={14} className="text-gray-300" />
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Current status banner */}
                 <div className={`rounded-2xl p-5 border ${
                   myCase.status === 'Resolved' ? 'bg-green-50 border-green-200' :
@@ -127,12 +172,6 @@ export function StudentDashboard({ user, cases, setCases, onLogout, onUpdateProf
                             : 'Your appeal was successful and the original decision was overturned.'}
                           {' '}You can download an official certificate confirming this for your records.
                         </p>
-                        {certError && (
-                          <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
-                            <AlertCircle size={13} className="shrink-0" />
-                            <p className="text-xs">{certError}</p>
-                          </div>
-                        )}
                         <button type="button" onClick={handleDownloadCertificate} disabled={downloadingCert}
                           className="flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors">
                           <Download size={14} /> {downloadingCert ? 'Preparing…' : 'Download Clearance Certificate'}
@@ -232,6 +271,56 @@ export function StudentDashboard({ user, cases, setCases, onLogout, onUpdateProf
                   </div>
                 </div>
 
+                {/* The allegation itself. Students previously saw only a status tracker and a metadata
+                    summary — never the description, the evidence, or the audit trail — while the
+                    "Your Rights" card below promised the right to see the evidence against them. */}
+                <div className="bg-white rounded-2xl border border-gray-200 p-6">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">What Was Reported</p>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{myCase.description}</p>
+
+                  {myCase.evidence && (
+                    <div className="mt-5 pt-5 border-t border-gray-100">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Evidence Described</p>
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{myCase.evidence}</p>
+                    </div>
+                  )}
+
+                  {myCase.evidenceFiles.length > 0 && (
+                    <div className="mt-5 pt-5 border-t border-gray-100">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        Attached Evidence ({myCase.evidenceFiles.length})
+                      </p>
+                      <EvidenceGallery files={myCase.evidenceFiles} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Full history of everything that has happened on the case. */}
+                <div className="bg-white rounded-2xl border border-gray-200 p-6">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Case History</p>
+                  {myCase.auditTrail.length === 0 ? (
+                    <p className="text-sm text-gray-400">Nothing recorded yet.</p>
+                  ) : (
+                    <div className="space-y-0">
+                      {myCase.auditTrail.map((entry, i) => (
+                        <div key={i} className="flex gap-3">
+                          <div className="flex flex-col items-center">
+                            <div className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: '#1D3A5F' }} />
+                            {i < myCase.auditTrail.length - 1 && <div className="w-px flex-1 bg-gray-200 mt-1" />}
+                          </div>
+                          <div className="pb-4 min-w-0">
+                            <p className="text-sm text-gray-800">{entry.action}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{entry.by} · {entry.timestamp}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-400 mt-2 pt-3 border-t border-gray-100">
+                    The committee's internal deliberation notes are not shown here.
+                  </p>
+                </div>
+
                 {/* Rights notice */}
                 <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Your Rights</p>
@@ -320,12 +409,6 @@ export function StudentDashboard({ user, cases, setCases, onLogout, onUpdateProf
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
                       <p className="text-xs text-amber-800">By submitting, you confirm this is your genuine appeal and that the information provided is truthful.</p>
                     </div>
-                    {submitError && (
-                      <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-                        <AlertCircle size={15} className="shrink-0" />
-                        <p className="text-sm">{submitError}</p>
-                      </div>
-                    )}
                     <button
                       type="submit"
                       disabled={submitting || !appealText.trim()}

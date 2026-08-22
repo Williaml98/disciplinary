@@ -6,6 +6,7 @@ import {
   sendPasswordResetOtp, resetPassword, ApiError,
 } from '../../lib/api';
 import logo from '../../imports/logo.png';
+import { DEPARTMENTS } from './departments';
 
 const NAVY = '#1D3A5F';
 const ACCENT = '#9CC7EE';
@@ -210,14 +211,14 @@ function LoginForm({ onLogin, onSwitchToRegister, onForgotPassword }: {
 ───────────────────────────────────────── */
 type RegStep = 'details' | 'otp' | 'password';
 
-interface Details { name: string; studentId: string; email: string; }
+interface Details { name: string; studentId: string; department: string; email: string; }
 
 function RegisterForm({ onRegister, onSwitchToLogin }: {
   onRegister: (user: AppUser) => void;
   onSwitchToLogin: () => void;
 }) {
   const [step, setStep] = useState<RegStep>('details');
-  const [details, setDetails] = useState<Details>({ name: '', studentId: '', email: '' });
+  const [details, setDetails] = useState<Details>({ name: '', studentId: '', department: '', email: '' });
   const [detailErrors, setDetailErrors] = useState<Record<string, string>>({});
   const [sendError, setSendError] = useState('');
   const [sendingOtp, setSendingOtp] = useState(false);
@@ -248,6 +249,7 @@ function RegisterForm({ onRegister, onSwitchToLogin }: {
     const errors: Record<string, string> = {};
     if (!details.name.trim()) errors.name = 'Full name is required.';
     if (!details.studentId.trim()) errors.studentId = 'Student ID is required.';
+    if (!details.department.trim()) errors.department = 'Department is required.';
     if (!details.email.trim()) errors.email = 'Email is required.';
     setDetailErrors(errors);
     if (Object.keys(errors).length > 0) return;
@@ -311,6 +313,7 @@ function RegisterForm({ onRegister, onSwitchToLogin }: {
       const newUser = await register({
         name: details.name.trim(),
         studentId: details.studentId.trim(),
+        department: details.department.trim(),
         email: details.email.trim(),
         password,
         otp: enteredOtp,
@@ -383,6 +386,19 @@ function RegisterForm({ onRegister, onSwitchToLogin }: {
               onChange={e => { setDetails(d => ({ ...d, studentId: e.target.value })); setDetailErrors(p => ({ ...p, studentId: '' })); }}
               placeholder="e.g. 21045"
               className={inputCls(!!detailErrors.studentId)} onFocus={focusStyle} onBlur={blurStyle} />
+          </RegField>
+
+          <RegField label="Department" error={detailErrors.department}>
+            <select
+              value={details.department}
+              onChange={e => { setDetails(d => ({ ...d, department: e.target.value })); setDetailErrors(p => ({ ...p, department: '' })); }}
+              className={inputCls(!!detailErrors.department)}
+              onFocus={focusStyle}
+              onBlur={blurStyle}
+            >
+              <option value="">Select your department…</option>
+              {DEPARTMENTS.map(dept => <option key={dept} value={dept}>{dept}</option>)}
+            </select>
           </RegField>
 
           <RegField label="Email Address" error={detailErrors.email}>
@@ -810,12 +826,13 @@ function inputCls(hasError: boolean) {
   return `w-full border ${hasError ? 'border-red-400 bg-red-50' : 'border-gray-300'} rounded-xl px-4 py-2.5 text-sm focus:outline-none transition-colors`;
 }
 
-function focusStyle(e: React.FocusEvent<HTMLInputElement>) {
+// Generic over the element type so the same handlers work on <input> and <select>.
+function focusStyle(e: React.FocusEvent<HTMLElement>) {
   e.currentTarget.style.boxShadow = '0 0 0 2px #1D3A5F40';
   e.currentTarget.style.borderColor = '#1D3A5F';
 }
 
-function blurStyle(e: React.FocusEvent<HTMLInputElement>) {
+function blurStyle(e: React.FocusEvent<HTMLElement>) {
   e.currentTarget.style.boxShadow = '';
   e.currentTarget.style.borderColor = '';
 }

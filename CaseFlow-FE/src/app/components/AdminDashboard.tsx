@@ -1,29 +1,28 @@
 import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { LayoutDashboard, AlertTriangle, List, Clock, Search, ChevronRight, Bell, UserCog, Plus, Eye, EyeOff, CheckCircle, AlertCircle, BookOpen, Users, GraduationCap, Settings, Pencil, X, Scale, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, AlertTriangle, List, Clock, Search, ChevronRight, Bell, UserCog, Plus, AlertCircle, BookOpen, Users, GraduationCap, Settings, Pencil, Ban, RotateCcw, Mail, X, Scale, BarChart3 } from 'lucide-react';
 import { DashboardLayout, PageHeader, StatusBadge, EvidenceGallery } from './DashboardLayout';
 import { DisciplinaryRulesPage } from './DisciplinaryRulesPage';
 import { ReportsPage } from './ReportsPage';
 import type { AppUser, DisciplinaryCase, Role } from './mockData';
-import { fetchUsers, createUser, updateUserRole, deleteUser as apiDeleteUser, ApiError } from '../../lib/api';
+import {
+  fetchUsersPage, createUser, updateUserRole, updateUserStatus, updateUserProfile,
+  deleteUser as apiDeleteUser, fetchUserImpact, fetchAuditFeed,
+} from '../../lib/api';
+import { usePagedCases } from '../../lib/usePagedCases';
+import { useCaseStats, useDebouncedValue, useMonthlyCaseCounts, useUserStats } from '../../lib/hooks';
+import { Pagination } from './Pagination';
+import { Avatar } from './Avatar';
+import { StatusChanger } from './StatusChanger';
+import { DEPARTMENTS } from './departments';
+import type { AuditFeedEntry, CaseStatus, UserImpact } from './mockData';
+import { notifyError, notifySuccess, toMessage } from '../../lib/toast';
 
 interface Props {
   user: AppUser;
-  cases: DisciplinaryCase[];
   onLogout: () => void;
   onUpdateProfile: (updated: AppUser) => void;
 }
-
-const MONTHLY_DATA = [
-  { month: 'Nov 25', cases: 1 },
-  { month: 'Dec 25', cases: 0 },
-  { month: 'Jan 26', cases: 0 },
-  { month: 'Feb 26', cases: 0 },
-  { month: 'Mar 26', cases: 0 },
-  { month: 'Apr 26', cases: 0 },
-  { month: 'May 26', cases: 1 },
-  { month: 'Jun 26', cases: 5 },
-];
 
 const PIE_COLORS = ['#1D3A5F', '#f59e0b', '#f97316', '#a855f7', '#22c55e'];
 
@@ -41,54 +40,51 @@ const ROLE_LABELS: Record<Role, string> = {
   admin: 'Registrar / Admin',
 };
 
-const ROLE_COLORS: Record<Role, string> = {
-  lecturer: 'bg-blue-50 text-blue-700 border-blue-200',
-  committee: 'bg-slate-100 text-slate-700 border-slate-200',
-  student: 'bg-teal-50 text-teal-700 border-teal-200',
-  admin: 'bg-[#1D3A5F]/10 text-[#1D3A5F] border-[#1D3A5F]/20',
-};
-
-export function AdminDashboard({ user, cases, onLogout, onUpdateProfile }: Props) {
+export function AdminDashboard({ user, onLogout, onUpdateProfile }: Props) {
   const [activeNav, setActiveNav] = useState('overview');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [selectedCase, setSelectedCase] = useState<DisciplinaryCase | null>(null);
-  const [users, setUsers] = useState<AppUser[]>([]);
-  const [usersError, setUsersError] = useState('');
-
-  useEffect(() => {
-    fetchUsers()
-      .then(setUsers)
-      .catch(err => setUsersError(err instanceof ApiError ? err.message : 'Unable to load users.'));
-  }, []);
 
   const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
 
-  const activeSuspensions = cases.filter(c => c.registrationStatus === 'Restricted' && c.suspensionEnd && c.suspensionEnd >= today);
-  const expiredSuspensions = cases.filter(c => c.registrationStatus === 'Restricted' && c.suspensionEnd && c.suspensionEnd < today);
-  const flaggedStudents = cases.filter(c => c.registrationStatus === 'Flagged');
-  const openCases = cases.filter(c => c.status !== 'Resolved');
+  // Every tile, badge and pie slice now comes from server-side aggregates rather than being counted
+  // off a loaded array — which, with the list paginated, would silently describe only the current page.
+  const stats = useCaseStats();
+  const userStats = useUserStats();
+  const monthly = useMonthlyCaseCounts();
 
-  const statusCounts = {
-    Reported: cases.filter(c => c.status === 'Reported').length,
-    'Under Review': cases.filter(c => c.status === 'Under Review').length,
-    Decided: cases.filter(c => c.status === 'Decided').length,
-    'Under Appeal': cases.filter(c => c.status === 'Under Appeal').length,
-    Resolved: cases.filter(c => c.status === 'Resolved').length,
+  // Debounced so typing in the search box doesn't fire a request per keystroke.
+  const debouncedSearch = useDebouncedValue(searchQuery, 300);
+  const caseFilters = {
+    search: debouncedSearch || undefined,
+    status: statusFilter === 'All' ? undefined : ([statusFilter] as CaseStatus[]),
   };
+  const pagedCases = usePagedCases(caseFilters, { size: 20, sort: 'reportDate,desc' });
 
-  const pieData = Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
+  const recentCases = usePagedCases({}, { size: 5, sort: 'reportDate,desc', enabled: activeNav === 'overview' });
 
-  const filteredCases = cases.filter(c => {
-    const matchSearch = !searchQuery ||
-      c.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.studentId.includes(searchQuery) ||
-      c.id.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchStatus = statusFilter === 'All' || c.status === statusFilter;
-    return matchSearch && matchStatus;
-  });
+  // The registrar-alert buckets are deliberately NOT paginated: this screen exists to triage everything
+  // before registration opens, and three separate pagers would make it worse at exactly that. A high
+  // page size plus an explicit truncation note is more honest than silently showing the first page.
+  const alertsEnabled = activeNav === 'alerts';
+  const expired = usePagedCases(
+    { registrationStatus: 'Restricted', suspensionEndTo: yesterday }, { size: 100, enabled: alertsEnabled });
+  const active = usePagedCases(
+    { registrationStatus: 'Restricted', suspensionEndFrom: today }, { size: 100, enabled: alertsEnabled });
+  const flagged = usePagedCases(
+    { registrationStatus: 'Flagged' }, { size: 100, enabled: alertsEnabled });
 
-  const alertBadge = activeSuspensions.length + expiredSuspensions.length + flaggedStudents.length;
+  const pieData = stats.data ? [
+    { name: 'Reported', value: stats.data.reported },
+    { name: 'Under Review', value: stats.data.underReview },
+    { name: 'Decided', value: stats.data.decided },
+    { name: 'Under Appeal', value: stats.data.underAppeal },
+    { name: 'Resolved', value: stats.data.resolved },
+  ] : [];
+
+  const alertBadge = stats.data?.registrationHolds ?? 0;
 
   const navItems = [
     { id: 'overview', label: 'Dashboard Overview', icon: <LayoutDashboard size={16} /> },
@@ -110,19 +106,19 @@ export function AdminDashboard({ user, cases, onLogout, onUpdateProfile }: Props
           <PageHeader title="Dashboard Overview" subtitle="System-wide case statistics and activity summary" />
           <div className="flex-1 overflow-y-auto p-4 sm:p-8">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 mb-6 sm:mb-8">
-              <StatCard label="Total Cases" value={cases.length} color="primary" />
-              <StatCard label="Open Cases" value={openCases.length} color="amber" sub={`${statusCounts['Under Review']} under review`} />
-              <StatCard label="Active Suspensions" value={activeSuspensions.length} color="red" sub="registration restricted" />
-              <StatCard label="Registered Users" value={users.length} color="green" sub={`${users.filter(u => u.role === 'student').length} students`} />
+              <StatCard label="Total Cases" value={stats.data?.total ?? 0} color="primary" />
+              <StatCard label="Open Cases" value={stats.data?.open ?? 0} color="amber" sub={`${stats.data?.underReview ?? 0} under review`} />
+              <StatCard label="Active Suspensions" value={stats.data?.activeSuspensions ?? 0} color="red" sub="registration restricted" />
+              <StatCard label="Registered Users" value={userStats.data?.total ?? 0} color="green" sub={`${userStats.data?.student ?? 0} students`} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-6 mb-6 sm:mb-8">
               <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 p-6">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-5">Cases Reported by Month</p>
                 <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={MONTHLY_DATA} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                  <BarChart data={monthly.data ?? []} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#9ca3af' }} />
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#9ca3af' }} />
                     <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} allowDecimals={false} />
                     <Tooltip contentStyle={{ borderRadius: '10px', border: '1px solid #e5e7eb', fontSize: '12px' }} />
                     <Bar dataKey="cases" name="Cases Reported" fill="#1D3A5F" radius={[4, 4, 0, 0]} />
@@ -157,7 +153,7 @@ export function AdminDashboard({ user, cases, onLogout, onUpdateProfile }: Props
             <div className="bg-white rounded-2xl border border-gray-200 p-6">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Recent Cases</p>
               <div className="space-y-2">
-                {cases.slice(0, 5).map(c => (
+                {recentCases.items.map(c => (
                   <div key={c.id} className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-0">
                     <div className="flex items-center gap-4">
                       <span className="text-xs font-mono text-gray-400 w-24">{c.id}</span>
@@ -183,16 +179,19 @@ export function AdminDashboard({ user, cases, onLogout, onUpdateProfile }: Props
         <>
           <PageHeader title="Registrar Alerts" subtitle="Students requiring action before semester registration opens" />
           <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-5 sm:space-y-6">
-            {expiredSuspensions.length > 0 && (
-              <AlertSection title="Suspension Ended — Awaiting Re-integration Clearance" color="red" items={expiredSuspensions}
+            {expired.items.length > 0 && (
+              <AlertSection title="Suspension Ended — Awaiting Re-integration Clearance" color="red"
+                items={expired.items} total={expired.totalElements}
                 message="These students have served their suspension but have NOT yet been formally cleared. Their registration remains restricted. The committee must approve re-integration." />
             )}
-            {activeSuspensions.length > 0 && (
-              <AlertSection title="Active Suspensions — Registration Blocked" color="orange" items={activeSuspensions}
+            {active.items.length > 0 && (
+              <AlertSection title="Active Suspensions — Registration Blocked" color="orange"
+                items={active.items} total={active.totalElements}
                 message="These students are currently under suspension and must NOT be permitted to register for any courses." />
             )}
-            {flaggedStudents.length > 0 && (
-              <AlertSection title="Pending Cases — Registration Flagged" color="amber" items={flaggedStudents}
+            {flagged.items.length > 0 && (
+              <AlertSection title="Pending Cases — Registration Flagged" color="amber"
+                items={flagged.items} total={flagged.totalElements}
                 message="These students have open cases not yet decided. Monitor before permitting registration." />
             )}
             {alertBadge === 0 && (
@@ -208,11 +207,20 @@ export function AdminDashboard({ user, cases, onLogout, onUpdateProfile }: Props
       {/* ── ALL CASES ── */}
       {activeNav === 'cases' && (
         <>
-          <PageHeader title="All Cases" subtitle={`${filteredCases.length} case${filteredCases.length !== 1 ? 's' : ''} found`} />
+          <PageHeader title="All Cases" subtitle={`${pagedCases.totalElements} case${pagedCases.totalElements !== 1 ? 's' : ''} found`} />
           {selectedCase ? (
             <div className="flex-1 overflow-y-auto p-4 sm:p-8">
               <button onClick={() => setSelectedCase(null)} className="text-sm text-gray-500 hover:text-gray-900 mb-5 transition-colors">← Back to cases</button>
-              <AdminCaseDetail c={selectedCase} />
+              <AdminCaseDetail
+            c={selectedCase}
+            actor={user.name}
+            onStatusChanged={updated => {
+              setSelectedCase(updated);
+              pagedCases.replaceItem(updated);
+              pagedCases.reload();
+              stats.reload();
+            }}
+          />
             </div>
           ) : (
             <div className="flex-1 overflow-hidden flex flex-col">
@@ -243,7 +251,7 @@ export function AdminDashboard({ user, cases, onLogout, onUpdateProfile }: Props
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 bg-white">
-                    {filteredCases.map(c => (
+                    {pagedCases.items.map(c => (
                       <tr key={c.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4 text-xs font-mono text-gray-500">{c.id}</td>
                         <td className="px-6 py-4"><p className="text-sm text-gray-900">{c.studentName}</p><p className="text-xs text-gray-400">ID: {c.studentId}</p></td>
@@ -261,58 +269,35 @@ export function AdminDashboard({ user, cases, onLogout, onUpdateProfile }: Props
                     ))}
                   </tbody>
                 </table>
-                {filteredCases.length === 0 && <div className="text-center py-12 text-gray-400 text-sm">No cases match your search.</div>}
+                {pagedCases.loading && pagedCases.items.length === 0 && (
+                  <div className="text-center py-12 text-gray-400 text-sm">Loading cases…</div>
+                )}
+                {pagedCases.error && (
+                  <div className="text-center py-12 text-red-600 text-sm">{pagedCases.error}</div>
+                )}
+                {!pagedCases.loading && !pagedCases.error && pagedCases.items.length === 0 && (
+                  <div className="text-center py-12 text-gray-400 text-sm">No cases match your search.</div>
+                )}
               </div>
+              <Pagination
+                page={pagedCases.page}
+                totalPages={pagedCases.totalPages}
+                totalElements={pagedCases.totalElements}
+                first={pagedCases.first}
+                last={pagedCases.last}
+                onPageChange={pagedCases.setPage}
+                label="case"
+              />
             </div>
           )}
         </>
       )}
 
       {/* ── USER MANAGEMENT ── */}
-      {activeNav === 'users' && (
-        usersError ? (
-          <>
-            <PageHeader title="User Management" />
-            <div className="flex-1 overflow-y-auto p-4 sm:p-8">
-              <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3 max-w-2xl mx-auto">
-                <AlertCircle size={15} className="shrink-0" />
-                <p className="text-sm">{usersError}</p>
-              </div>
-            </div>
-          </>
-        ) : (
-          <UserManagement currentAdmin={user} users={users} setUsers={setUsers} />
-        )
-      )}
+      {activeNav === 'users' && <UserManagement currentAdmin={user} />}
 
       {/* ── AUDIT LOG ── */}
-      {activeNav === 'audit' && (
-        <>
-          <PageHeader title="System Audit Log" subtitle="Complete timestamped log of all actions across every case" />
-          <div className="flex-1 overflow-y-auto p-8">
-            <div className="max-w-3xl mx-auto bg-white rounded-2xl border border-gray-200 overflow-hidden">
-              <div className="divide-y divide-gray-100">
-                {cases.flatMap(c => c.auditTrail.map(e => ({ ...e, caseId: c.id }))).sort((a, b) => b.timestamp.localeCompare(a.timestamp)).map((entry, i) => (
-                  <div key={i} className="flex items-start gap-4 px-6 py-4 hover:bg-gray-50">
-                    <div className="w-2 h-2 rounded-full mt-2 shrink-0" style={{ backgroundColor: '#1D3A5F' }} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ backgroundColor: '#1D3A5F14', color: '#1D3A5F' }}>{entry.caseId}</span>
-                        <span className="text-sm text-gray-800">{entry.action}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs text-gray-400">{entry.by}</span>
-                        <span className="text-gray-300">·</span>
-                        <span className="text-xs text-gray-400">{entry.timestamp}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
+      {activeNav === 'audit' && <AuditLog />}
 
       {activeNav === 'rules' && <DisciplinaryRulesPage />}
       {activeNav === 'reports' && <ReportsPage />}
@@ -323,78 +308,133 @@ export function AdminDashboard({ user, cases, onLogout, onUpdateProfile }: Props
 /* ────────────────────────────────────────────────────────────
    USER MANAGEMENT PANEL
 ──────────────────────────────────────────────────────────── */
-function UserManagement({ currentAdmin, users, setUsers }: {
-  currentAdmin: AppUser;
-  users: AppUser[];
-  setUsers: React.Dispatch<React.SetStateAction<AppUser[]>>;
-}) {
+function UserManagement({ currentAdmin }: { currentAdmin: AppUser }) {
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<AppUser | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AppUser | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<Role | 'all'>('all');
-  const [toast, setToast] = useState('');
-  const [toastKind, setToastKind] = useState<'success' | 'error'>('success');
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
 
-  function showToast(msg: string, kind: 'success' | 'error' = 'success') {
-    setToast(msg);
-    setToastKind(kind);
-    setTimeout(() => setToast(''), 3000);
-  }
+  const [users, setUsers] = useState<AppUser[]>([]);
+  const [page, setPage] = useState(0);
+  const [pageMeta, setPageMeta] = useState({ totalPages: 0, totalElements: 0, first: true, last: true });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [reloadToken, setReloadToken] = useState(0);
+
+  const debouncedSearch = useDebouncedValue(searchQuery, 300);
+  // Chip counts stay global rather than counting the loaded page, which would show "how many are on
+  // screen" instead of how many accounts of each role exist.
+  const stats = useUserStats();
+
+  // Narrowing the filter while on a later page would otherwise land on a page that no longer exists.
+  useEffect(() => { setPage(0); }, [debouncedSearch, roleFilter]);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError('');
+    fetchUsersPage({
+      search: debouncedSearch || undefined,
+      role: roleFilter === 'all' ? undefined : roleFilter,
+      page,
+      size: 20,
+    })
+      .then(result => {
+        if (!active) return;
+        setUsers(result.content);
+        setPageMeta({
+          totalPages: result.totalPages,
+          totalElements: result.totalElements,
+          first: result.first,
+          last: result.last,
+        });
+      })
+      .catch(err => active && setError(toMessage(err, 'Unable to load users.')))
+      .finally(() => active && setLoading(false));
+    return () => { active = false; };
+  }, [debouncedSearch, roleFilter, page, reloadToken]);
+
+  const reload = () => setReloadToken(t => t + 1);
 
   async function changeRole(userId: string, newRole: Role) {
     setBusyUserId(userId);
     try {
       const updated = await updateUserRole(userId, newRole);
       setUsers(prev => prev.map(u => u.id === userId ? updated : u));
-      setEditingUserId(null);
-      showToast('Role updated successfully.');
+      notifySuccess(`${updated.name} is now ${ROLE_LABELS[newRole]}.`);
+      stats.reload();
+      // The row may no longer match an active role filter, so reconcile the list.
+      if (roleFilter !== 'all') reload();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : 'Unable to update role.', 'error');
+      notifyError(err, 'Unable to update role.');
     } finally {
       setBusyUserId(null);
     }
   }
 
-  async function deleteUser(userId: string) {
-    if (userId === currentAdmin.id) return;
-    setBusyUserId(userId);
+  async function toggleActive(target: AppUser) {
+    setBusyUserId(target.id);
     try {
-      await apiDeleteUser(userId);
-      setUsers(prev => prev.filter(u => u.id !== userId));
-      showToast('Account removed.');
+      const updated = await updateUserStatus(target.id, !target.active);
+      setUsers(prev => prev.map(u => u.id === target.id ? updated : u));
+      notifySuccess(
+        updated.active ? `${updated.name} can sign in again.` : `${updated.name} has been deactivated.`,
+        updated.active ? undefined : 'They can no longer sign in, and their cases are untouched.',
+      );
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : 'Unable to remove account.', 'error');
+      notifyError(err, 'Unable to change account status.');
+    } finally {
+      setBusyUserId(null);
+    }
+  }
+
+  async function confirmDelete(target: AppUser) {
+    setBusyUserId(target.id);
+    try {
+      await apiDeleteUser(target.id);
+      notifySuccess(`${target.name} was removed.`);
+      setDeleteTarget(null);
+      stats.reload();
+      reload();
+    } catch (err) {
+      notifyError(err, 'Unable to remove account.');
     } finally {
       setBusyUserId(null);
     }
   }
 
   function handleCreate(newUser: AppUser) {
-    setUsers(prev => [...prev, newUser]);
     setShowCreateForm(false);
-    showToast(`Account created for ${newUser.name}.`);
+    notifySuccess(
+      `Account created for ${newUser.name}.`,
+      'A welcome email with a temporary password has been sent.',
+    );
+    stats.reload();
+    setPage(0);
+    reload();
   }
 
-  const filtered = users.filter(u => {
-    const matchSearch = !searchQuery || u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchRole = roleFilter === 'all' || u.role === roleFilter;
-    return matchSearch && matchRole;
-  });
+  function handleEdited(updated: AppUser) {
+    setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
+    setEditingUser(null);
+    notifySuccess(`${updated.name}'s details were updated.`);
+  }
 
   const roleCounts = {
-    all: users.length,
-    admin: users.filter(u => u.role === 'admin').length,
-    committee: users.filter(u => u.role === 'committee').length,
-    lecturer: users.filter(u => u.role === 'lecturer').length,
-    student: users.filter(u => u.role === 'student').length,
+    all: stats.data?.total ?? 0,
+    admin: stats.data?.admin ?? 0,
+    committee: stats.data?.committee ?? 0,
+    lecturer: stats.data?.lecturer ?? 0,
+    student: stats.data?.student ?? 0,
   };
 
   return (
     <>
       <PageHeader
         title="User Management"
-        subtitle={`${users.length} account${users.length !== 1 ? 's' : ''} registered`}
+        subtitle={`${pageMeta.totalElements} account${pageMeta.totalElements !== 1 ? 's' : ''} registered`}
         action={
           <button onClick={() => setShowCreateForm(true)}
             className="flex items-center gap-2 text-white px-4 py-2 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity"
@@ -403,18 +443,6 @@ function UserManagement({ currentAdmin, users, setUsers }: {
           </button>
         }
       />
-
-      {/* Toast */}
-      {toast && (
-        <div className={`mx-8 mt-4 flex items-center gap-2 rounded-xl px-4 py-3 text-sm ${
-          toastKind === 'error' ? 'bg-red-50 border border-red-200 text-red-800' : 'bg-green-50 border border-green-200 text-green-800'
-        }`}>
-          {toastKind === 'error'
-            ? <AlertCircle size={14} className="text-red-600 shrink-0" />
-            : <CheckCircle size={14} className="text-green-600 shrink-0" />}
-          {toast}
-        </div>
-      )}
 
       <div className="flex-1 overflow-hidden flex flex-col">
         {/* Filters */}
@@ -437,22 +465,20 @@ function UserManagement({ currentAdmin, users, setUsers }: {
         </div>
 
         <div className="flex-1 overflow-auto">
-          <table className="w-full min-w-[640px]">
+          <table className="w-full min-w-[760px]">
             <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
               <tr>
-                {['User', 'Email', 'Role', 'Additional Info', 'Actions'].map(h => (
+                {['User', 'Email', 'Role', 'Additional Info', 'Status', 'Actions'].map(h => (
                   <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
-              {filtered.map(u => (
-                <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+              {users.map(u => (
+                <tr key={u.id} className={`hover:bg-gray-50 transition-colors ${u.active ? '' : 'opacity-60'}`}>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs shrink-0" style={{ backgroundColor: '#1D3A5F' }}>
-                        {u.name.split(' ').map(n => n[0]).slice(0, 2).join('')}
-                      </div>
+                      <Avatar user={u} size={32} />
                       <div>
                         <p className="text-sm text-gray-900">{u.name}</p>
                         {u.id === currentAdmin.id && <p className="text-xs text-gray-400">(you)</p>}
@@ -461,84 +487,116 @@ function UserManagement({ currentAdmin, users, setUsers }: {
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500">{u.email}</td>
                   <td className="px-6 py-4">
-                    {editingUserId === u.id ? (
-                      <div className="flex items-center gap-2">
-                        <select
-                          defaultValue={u.role}
-                          disabled={busyUserId === u.id}
-                          onChange={e => changeRole(u.id, e.target.value as Role)}
-                          className="border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none disabled:opacity-60"
-                          onFocus={focusStyleSelect}
-                          onBlur={blurStyleSelect}
-                          autoFocus
-                        >
-                          {ROLE_OPTIONS.map(opt => (
-                            <option key={opt.value} value={opt.value}>{opt.label}</option>
-                          ))}
-                        </select>
-                        <button onClick={() => setEditingUserId(null)} className="text-gray-400 hover:text-gray-600">
-                          <X size={14} />
-                        </button>
-                      </div>
+                    <select
+                      value={u.role}
+                      disabled={busyUserId === u.id || u.id === currentAdmin.id}
+                      onChange={e => changeRole(u.id, e.target.value as Role)}
+                      aria-label={`Role for ${u.name}`}
+                      className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
+                      onFocus={focusStyleSelect}
+                      onBlur={blurStyleSelect}
+                    >
+                      {ROLE_OPTIONS.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500">
+                    <div className="flex flex-col gap-1">
+                      {u.studentId && <span className="bg-gray-100 px-2 py-0.5 rounded text-xs w-fit">ID: {u.studentId}</span>}
+                      {u.department && <span className="text-xs text-gray-500">{u.department}</span>}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    {u.active ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
+                        Active
+                      </span>
                     ) : (
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border ${ROLE_COLORS[u.role]}`}>
-                        {u.role === 'lecturer' && <BookOpen size={11} />}
-                        {u.role === 'committee' && <Users size={11} />}
-                        {u.role === 'student' && <GraduationCap size={11} />}
-                        {u.role === 'admin' && <Settings size={11} />}
-                        {ROLE_LABELS[u.role]}
+                      <span className="inline-flex items-center gap-1 text-xs text-gray-600 bg-gray-100 border border-gray-200 rounded-full px-2 py-0.5">
+                        <Ban size={10} /> Deactivated
                       </span>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
-                    {u.studentId && <span className="bg-gray-100 px-2 py-0.5 rounded text-xs">ID: {u.studentId}</span>}
-                    {u.department && <span className="text-xs text-gray-500">{u.department}</span>}
-                  </td>
                   <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      {u.id !== currentAdmin.id && editingUserId !== u.id && (
-                        <>
-                          <button onClick={() => setEditingUserId(u.id)} disabled={busyUserId === u.id}
-                            className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#1D3A5F] disabled:opacity-60 transition-colors">
-                            <Pencil size={12} /> Change Role
-                          </button>
-                          <button onClick={() => deleteUser(u.id)} disabled={busyUserId === u.id}
-                            className="text-xs text-red-400 hover:text-red-600 disabled:opacity-60 transition-colors">
-                            {busyUserId === u.id ? 'Removing…' : 'Remove'}
-                          </button>
-                        </>
-                      )}
-                      {u.id === currentAdmin.id && (
-                        <span className="text-xs text-gray-300">—</span>
-                      )}
-                    </div>
+                    {u.id === currentAdmin.id ? (
+                      <span className="text-xs text-gray-300">—</span>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <button onClick={() => setEditingUser(u)} disabled={busyUserId === u.id}
+                          className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#1D3A5F] disabled:opacity-60 transition-colors">
+                          <Pencil size={12} /> Edit
+                        </button>
+                        {/* Deactivation sits alongside delete, not in place of it: it's reversible and
+                            keeps the account's name resolvable from the cases that reference it. */}
+                        <button onClick={() => toggleActive(u)} disabled={busyUserId === u.id}
+                          className="flex items-center gap-1 text-xs text-gray-500 hover:text-amber-600 disabled:opacity-60 transition-colors">
+                          {u.active ? <><Ban size={12} /> Deactivate</> : <><RotateCcw size={12} /> Reactivate</>}
+                        </button>
+                        <button onClick={() => setDeleteTarget(u)} disabled={busyUserId === u.id}
+                          className="text-xs text-red-400 hover:text-red-600 disabled:opacity-60 transition-colors">
+                          {busyUserId === u.id ? 'Working…' : 'Delete'}
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {filtered.length === 0 && <div className="text-center py-12 text-gray-400 text-sm">No users match your search.</div>}
+          {loading && users.length === 0 && (
+            <div className="text-center py-12 text-gray-400 text-sm">Loading accounts…</div>
+          )}
+          {error && (
+            <div className="mx-8 mt-4 flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+              <AlertCircle size={15} className="shrink-0" />
+              <p className="text-sm">{error}</p>
+            </div>
+          )}
+          {!loading && !error && users.length === 0 && (
+            <div className="text-center py-12 text-gray-400 text-sm">No accounts match your search.</div>
+          )}
         </div>
+
+        <Pagination
+          page={page}
+          totalPages={pageMeta.totalPages}
+          totalElements={pageMeta.totalElements}
+          first={pageMeta.first}
+          last={pageMeta.last}
+          onPageChange={setPage}
+          label="account"
+        />
       </div>
 
-      {/* Create account slide-over */}
       {showCreateForm && (
-        <CreateAccountModal users={users} onCreate={handleCreate} onClose={() => setShowCreateForm(false)} />
+        <CreateAccountModal onCreate={handleCreate} onClose={() => setShowCreateForm(false)} />
+      )}
+      {editingUser && (
+        <EditAccountModal user={editingUser} onSaved={handleEdited} onClose={() => setEditingUser(null)} />
+      )}
+      {deleteTarget && (
+        <DeleteAccountDialog
+          user={deleteTarget}
+          busy={busyUserId === deleteTarget.id}
+          onConfirm={() => confirmDelete(deleteTarget)}
+          onDeactivateInstead={() => { toggleActive(deleteTarget); setDeleteTarget(null); }}
+          onClose={() => setDeleteTarget(null)}
+        />
       )}
     </>
   );
 }
 
+
 /* ────────────────────────────────────────────────────────────
    CREATE ACCOUNT MODAL
 ──────────────────────────────────────────────────────────── */
-function CreateAccountModal({ users, onCreate, onClose }: {
-  users: AppUser[];
+function CreateAccountModal({ onCreate, onClose }: {
   onCreate: (user: AppUser) => void;
   onClose: () => void;
 }) {
-  const [form, setFormState] = useState({ name: '', email: '', role: '' as Role | '', studentId: '', department: '', password: '', confirmPassword: '' });
-  const [showPassword, setShowPassword] = useState(false);
+  const [form, setFormState] = useState({ name: '', email: '', role: '' as Role | '', studentId: '', department: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [creating, setCreating] = useState(false);
 
@@ -554,13 +612,11 @@ function CreateAccountModal({ users, onCreate, onClose }: {
     const e: Record<string, string> = {};
     if (!form.name.trim()) e.name = 'Full name is required.';
     if (!form.email.trim()) e.email = 'Email is required.';
-    else if (users.some(u => u.email.toLowerCase() === form.email.trim().toLowerCase())) e.email = 'Email already in use.';
+    // Duplicate emails are no longer pre-checked against a loaded user list — with the list paginated,
+    // that array only holds one page, so it would miss most collisions. The backend returns a 409.
     if (!form.role) e.role = 'Please select a role.';
     if (isStudent && !form.studentId.trim()) e.studentId = 'Student ID is required.';
     if (needsDept && !form.department.trim()) e.department = 'Department is required.';
-    if (!form.password) e.password = 'Password is required.';
-    else if (form.password.length < 8) e.password = 'Minimum 8 characters.';
-    if (form.confirmPassword !== form.password) e.confirmPassword = 'Passwords do not match.';
     return e;
   }
 
@@ -576,13 +632,14 @@ function CreateAccountModal({ users, onCreate, onClose }: {
         name: form.name.trim(),
         email: form.email.trim(),
         role: form.role as Role,
-        password: form.password,
         ...(isStudent ? { studentId: form.studentId.trim() } : {}),
         ...(needsDept ? { department: form.department.trim() } : {}),
       });
       onCreate(newUser);
     } catch (err) {
-      setErrors({ email: err instanceof ApiError ? err.message : 'Unable to create account. Please try again.' });
+      // Toast rather than setErrors({ email: ... }) — a server error about any field used to render
+      // under the Email input regardless of what it was actually about.
+      notifyError(err, 'Unable to create account. Please try again.');
     } finally {
       setCreating(false);
     }
@@ -633,28 +690,23 @@ function CreateAccountModal({ users, onCreate, onClose }: {
 
             {needsDept && (
               <ModalField label="Department" error={errors.department}>
-                <input type="text" value={form.department} onChange={e => set('department', e.target.value)}
-                  placeholder="e.g. Computer Science" className={inputCls(!!errors.department)}
-                  onFocus={focusStyle} onBlur={blurStyle} />
+                <select value={form.department} onChange={e => set('department', e.target.value)}
+                  className={inputCls(!!errors.department)} onFocus={focusStyleSelect} onBlur={blurStyleSelect}>
+                  <option value="">Select a department…</option>
+                  {DEPARTMENTS.map(dept => <option key={dept} value={dept}>{dept}</option>)}
+                </select>
               </ModalField>
             )}
 
-            <ModalField label="Password" error={errors.password}>
-              <div className="relative">
-                <input type={showPassword ? 'text' : 'password'} value={form.password}
-                  onChange={e => set('password', e.target.value)} placeholder="Minimum 8 characters"
-                  className={inputCls(!!errors.password) + ' pr-11'} onFocus={focusStyle} onBlur={blurStyle} />
-                <button type="button" onClick={() => setShowPassword(s => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                  {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                </button>
-              </div>
-            </ModalField>
-
-            <ModalField label="Confirm Password" error={errors.confirmPassword}>
-              <input type="password" value={form.confirmPassword} onChange={e => set('confirmPassword', e.target.value)}
-                placeholder="Re-enter password" className={inputCls(!!errors.confirmPassword)}
-                onFocus={focusStyle} onBlur={blurStyle} />
-            </ModalField>
+            {/* No password fields: the backend generates a one-time password and emails it, then forces
+                a change at first sign-in, so an admin never handles someone else's credential. */}
+            <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5">
+              <Mail size={14} className="text-blue-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-blue-800">
+                A welcome email with a temporary password will be sent to this address. They'll be asked
+                to choose their own password the first time they sign in.
+              </p>
+            </div>
 
             <div className="pt-2 space-y-2">
               <button type="submit" disabled={creating} className="w-full text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity" style={{ backgroundColor: '#1D3A5F' }}>
@@ -665,6 +717,227 @@ function CreateAccountModal({ users, onCreate, onClose }: {
               </button>
             </div>
           </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   EDIT ACCOUNT — name / email / department / student ID
+──────────────────────────────────────────────────────────── */
+
+/**
+ * Admins could previously only change a user's role or delete them outright; the PATCH endpoint that
+ * accepts name, email, department and student ID already existed but was wired only to self-service
+ * profile editing.
+ */
+function EditAccountModal({ user, onSaved, onClose }: {
+  user: AppUser;
+  onSaved: (updated: AppUser) => void;
+  onClose: () => void;
+}) {
+  const [form, setFormState] = useState({
+    name: user.name,
+    email: user.email,
+    department: user.department ?? '',
+    studentId: user.studentId ?? '',
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  const isStudent = user.role === 'student';
+
+  function set(field: string, value: string) {
+    setFormState(f => ({ ...f, [field]: value }));
+    setErrors(e => { const ne = { ...e }; delete ne[field]; return ne; });
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const found: Record<string, string> = {};
+    if (!form.name.trim()) found.name = 'Full name is required.';
+    if (!form.email.trim()) found.email = 'Email is required.';
+    setErrors(found);
+    if (Object.keys(found).length > 0) return;
+
+    setSaving(true);
+    try {
+      onSaved(await updateUserProfile(user.id, {
+        name: form.name.trim(),
+        email: form.email.trim(),
+        department: form.department.trim() || undefined,
+        studentId: form.studentId.trim() || undefined,
+      }));
+    } catch (err) {
+      notifyError(err, 'Unable to save changes. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-end">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="relative w-full max-w-md h-full bg-white shadow-2xl flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200" style={{ backgroundColor: '#1D3A5F' }}>
+          <h2 className="text-white font-medium">Edit Account</h2>
+          <button onClick={onClose} className="text-white/70 hover:text-white transition-colors"><X size={18} /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex items-center gap-3 mb-5 pb-5 border-b border-gray-100">
+            <Avatar user={user} size={40} />
+            <div className="min-w-0">
+              <p className="text-sm text-gray-900 truncate">{user.name}</p>
+              <p className="text-xs text-gray-400">{ROLE_LABELS[user.role]}</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <ModalField label="Full Name" error={errors.name}>
+              <input type="text" value={form.name} onChange={e => set('name', e.target.value)}
+                className={inputCls(!!errors.name)} onFocus={focusStyle} onBlur={blurStyle} />
+            </ModalField>
+
+            <ModalField label="Email Address" error={errors.email}>
+              <input type="email" value={form.email} onChange={e => set('email', e.target.value)}
+                className={inputCls(!!errors.email)} onFocus={focusStyle} onBlur={blurStyle} />
+            </ModalField>
+
+            {isStudent ? (
+              <ModalField label="Student ID" error={errors.studentId}>
+                <input type="text" value={form.studentId} onChange={e => set('studentId', e.target.value)}
+                  className={inputCls(!!errors.studentId)} onFocus={focusStyle} onBlur={blurStyle} />
+              </ModalField>
+            ) : (
+              <ModalField label="Department" error={errors.department}>
+                <select value={form.department} onChange={e => set('department', e.target.value)}
+                  className={inputCls(!!errors.department)} onFocus={focusStyleSelect} onBlur={blurStyleSelect}>
+                  <option value="">No department</option>
+                  {DEPARTMENTS.map(dept => <option key={dept} value={dept}>{dept}</option>)}
+                </select>
+              </ModalField>
+            )}
+
+            {isStudent && (
+              <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
+                Changing a student ID re-points which case this account can see. Only change it to
+                correct a mistake.
+              </p>
+            )}
+
+            <div className="pt-2 space-y-2">
+              <button type="submit" disabled={saving}
+                className="w-full text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
+                style={{ backgroundColor: '#1D3A5F' }}>
+                {saving ? 'Saving…' : 'Save Changes'}
+              </button>
+              <button type="button" onClick={onClose}
+                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl py-2.5 text-sm transition-colors">
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   DELETE CONFIRMATION — with impact warning
+──────────────────────────────────────────────────────────── */
+
+/**
+ * Delete used to happen on a single click with no confirmation at all.
+ *
+ * Cases reference people by display-name string rather than by foreign key, so a delete never fails —
+ * it silently leaves those references pointing at nobody. The impact counts come from the server so the
+ * admin sees what would be orphaned, and deactivating is offered as the reversible alternative.
+ */
+function DeleteAccountDialog({ user, busy, onConfirm, onDeactivateInstead, onClose }: {
+  user: AppUser;
+  busy: boolean;
+  onConfirm: () => void;
+  onDeactivateInstead: () => void;
+  onClose: () => void;
+}) {
+  const [impact, setImpact] = useState<UserImpact | null>(null);
+  const [loadingImpact, setLoadingImpact] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    fetchUserImpact(user.id)
+      .then(result => active && setImpact(result))
+      .catch(() => active && setImpact(null))
+      .finally(() => active && setLoadingImpact(false));
+    return () => { active = false; };
+  }, [user.id]);
+
+  const hasImpact = !!impact
+    && (impact.casesReported > 0 || impact.casesAsStudent > 0 || impact.notesAuthored > 0);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <div className="p-6">
+          <div className="flex items-start gap-3 mb-4">
+            <div className="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+              <AlertTriangle size={17} className="text-red-600" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold text-gray-900">Delete {user.name}?</h2>
+              <p className="text-sm text-gray-500 mt-0.5">This permanently removes the account. It cannot be undone.</p>
+            </div>
+          </div>
+
+          {loadingImpact ? (
+            <p className="text-sm text-gray-400 py-3">Checking what references this account…</p>
+          ) : hasImpact && impact ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-4">
+              <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-2">
+                This account is referenced by existing records
+              </p>
+              <ul className="text-sm text-amber-900 space-y-1">
+                {impact.casesReported > 0 && (
+                  <li>• {impact.casesReported} case{impact.casesReported === 1 ? '' : 's'} they reported</li>
+                )}
+                {impact.casesAsStudent > 0 && (
+                  <li>• {impact.casesAsStudent} case{impact.casesAsStudent === 1 ? '' : 's'} filed against them</li>
+                )}
+                {impact.notesAuthored > 0 && (
+                  <li>• {impact.notesAuthored} committee note{impact.notesAuthored === 1 ? '' : 's'} they authored</li>
+                )}
+              </ul>
+              <p className="text-xs text-amber-800 mt-2">
+                Those records stay, but will point at a name with no account behind it. Deactivating keeps
+                the link intact and blocks sign-in.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 mb-4">
+              <p className="text-sm text-gray-600">No cases or notes reference this account.</p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            {hasImpact && (
+              <button onClick={onDeactivateInstead} disabled={busy}
+                className="w-full rounded-xl py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60 transition-opacity"
+                style={{ backgroundColor: '#1D3A5F' }}>
+                Deactivate instead (recommended)
+              </button>
+            )}
+            <button onClick={onConfirm} disabled={busy}
+              className="w-full rounded-xl py-2.5 text-sm font-medium bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white transition-colors">
+              {busy ? 'Deleting…' : 'Delete permanently'}
+            </button>
+            <button onClick={onClose} disabled={busy}
+              className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl py-2.5 text-sm transition-colors">
+              Cancel
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -689,7 +962,9 @@ function StatCard({ label, value, color, sub }: { label: string; value: string |
   );
 }
 
-function AlertSection({ title, color, items, message }: { title: string; color: string; items: DisciplinaryCase[]; message: string }) {
+function AlertSection({ title, color, items, total, message }: {
+  title: string; color: string; items: DisciplinaryCase[]; total: number; message: string;
+}) {
   const styles: Record<string, { wrap: string; text: string }> = {
     red: { wrap: 'border-red-200 bg-red-50', text: 'text-red-800' },
     orange: { wrap: 'border-orange-200 bg-orange-50', text: 'text-orange-800' },
@@ -700,7 +975,7 @@ function AlertSection({ title, color, items, message }: { title: string; color: 
     <div className={`rounded-2xl border ${s.wrap} p-6`}>
       <div className="flex items-center gap-2 mb-3">
         <AlertTriangle size={16} className={s.text} />
-        <p className={`text-sm font-semibold ${s.text}`}>{title} ({items.length})</p>
+        <p className={`text-sm font-semibold ${s.text}`}>{title} ({total})</p>
       </div>
       <p className={`text-xs mb-4 ${s.text} opacity-80`}>{message}</p>
       <div className="space-y-2">
@@ -728,7 +1003,11 @@ function AlertSection({ title, color, items, message }: { title: string; color: 
   );
 }
 
-function AdminCaseDetail({ c }: { c: DisciplinaryCase }) {
+function AdminCaseDetail({ c, actor, onStatusChanged }: {
+  c: DisciplinaryCase;
+  actor: string;
+  onStatusChanged: (updated: DisciplinaryCase) => void;
+}) {
   return (
     <div className="max-w-3xl mx-auto space-y-5">
       <div className="bg-white rounded-2xl border border-gray-200 p-6">
@@ -766,6 +1045,8 @@ function AdminCaseDetail({ c }: { c: DisciplinaryCase }) {
           {c.appealStatus && <div className="mt-2"><StatusBadge status={c.appealStatus} /></div>}
         </div>
       )}
+      <StatusChanger c={c} actor={actor} onChanged={onStatusChanged} />
+
       <div className="bg-white rounded-2xl border border-gray-200 p-6">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Full Audit Trail</p>
         <div className="space-y-3">
@@ -819,4 +1100,129 @@ function focusStyleSelect(e: React.FocusEvent<HTMLSelectElement>) {
 function blurStyleSelect(e: React.FocusEvent<HTMLSelectElement>) {
   e.currentTarget.style.boxShadow = '';
   e.currentTarget.style.borderColor = '';
+}
+
+/* ────────────────────────────────────────────────────────────
+   AUDIT LOG — merged case + user-management feed
+──────────────────────────────────────────────────────────── */
+
+/**
+ * Reads the server's merged feed rather than flat-mapping every case's audit trail in the browser.
+ *
+ * The old approach required the whole case list in memory, and could never have included
+ * user-management actions — creating, editing or deleting an account left no trace anywhere until the
+ * backend gained its own audit table.
+ */
+function AuditLog() {
+  const [kind, setKind] = useState<'ALL' | 'CASE' | 'USER'>('ALL');
+  const [page, setPage] = useState(0);
+  const [feed, setFeed] = useState<AuditFeedEntry[]>([]);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const [first, setFirst] = useState(true);
+  const [last, setLast] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError('');
+    fetchAuditFeed({ kind: kind === 'ALL' ? undefined : kind, page, size: 50 })
+      .then(result => {
+        if (!active) return;
+        setFeed(result.content);
+        setTotalPages(result.totalPages);
+        setTotalElements(result.totalElements);
+        setFirst(result.first);
+        setLast(result.last);
+      })
+      .catch(err => active && setError(toMessage(err, 'Unable to load the audit log.')))
+      .finally(() => active && setLoading(false));
+    return () => { active = false; };
+  }, [kind, page]);
+
+  const filters: { id: 'ALL' | 'CASE' | 'USER'; label: string }[] = [
+    { id: 'ALL', label: 'Everything' },
+    { id: 'CASE', label: 'Case activity' },
+    { id: 'USER', label: 'User management' },
+  ];
+
+  return (
+    <>
+      <PageHeader
+        title="System Audit Log"
+        subtitle="Timestamped record of every case action and account change"
+      />
+      <div className="flex-1 overflow-y-auto p-4 sm:p-8">
+        <div className="max-w-3xl mx-auto">
+          <div className="flex gap-1.5 mb-4">
+            {filters.map(f => (
+              <button
+                key={f.id}
+                onClick={() => { setKind(f.id); setPage(0); }}
+                className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${
+                  kind === f.id ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+                style={kind === f.id ? { backgroundColor: '#1D3A5F' } : {}}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+            {loading && feed.length === 0 ? (
+              <p className="px-6 py-12 text-center text-sm text-gray-400">Loading audit log…</p>
+            ) : error ? (
+              <p className="px-6 py-12 text-center text-sm text-red-600">{error}</p>
+            ) : feed.length === 0 ? (
+              <p className="px-6 py-12 text-center text-sm text-gray-400">Nothing recorded yet.</p>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {feed.map(entry => (
+                  <div key={`${entry.kind}-${entry.id}`} className="flex items-start gap-4 px-6 py-4 hover:bg-gray-50">
+                    <div
+                      className="w-2 h-2 rounded-full mt-2 shrink-0"
+                      style={{ backgroundColor: entry.kind === 'USER' ? '#a855f7' : '#1D3A5F' }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Same row shape for both kinds — only the reference chip differs. */}
+                        {entry.kind === 'CASE' ? (
+                          <span className="text-xs font-mono px-2 py-0.5 rounded"
+                            style={{ backgroundColor: '#1D3A5F14', color: '#1D3A5F' }}>
+                            {entry.caseId}
+                          </span>
+                        ) : (
+                          <span className="text-xs px-2 py-0.5 rounded bg-purple-50 text-purple-700">
+                            {entry.targetUserName ?? 'Account'}
+                          </span>
+                        )}
+                        <span className="text-sm text-gray-800">{entry.action}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs text-gray-400">{entry.by}</span>
+                        <span className="text-gray-300">·</span>
+                        <span className="text-xs text-gray-400">{entry.timestamp}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              totalElements={totalElements}
+              first={first}
+              last={last}
+              onPageChange={setPage}
+              label="entry"
+            />
+          </div>
+        </div>
+      </div>
+    </>
+  );
 }

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Download, AlertCircle, FileText, FileSpreadsheet, Eye } from 'lucide-react';
+import { Download, FileText, FileSpreadsheet, Eye } from 'lucide-react';
 import { PageHeader } from './DashboardLayout';
 import { OFFENSE_TYPES } from './offenseTypes';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from './ui/table';
 import type { CaseStatus, DecisionType } from './mockData';
-import { downloadCasesReport, previewCasesReport, ApiError } from '../../lib/api';
+import { downloadCasesReport, previewCasesReport } from '../../lib/api';
+import { notifyError, notifySuccess } from '../../lib/toast';
 
 const NAVY = '#1D3A5F';
 const INPUT_CLS = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3A5F] focus:border-transparent bg-white';
@@ -63,7 +64,6 @@ export function ReportsPage() {
   const [format, setFormat] = useState<'pdf' | 'csv'>('pdf');
   const [generating, setGenerating] = useState(false);
   const [previewing, setPreviewing] = useState(false);
-  const [error, setError] = useState('');
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewFormat, setPreviewFormat] = useState<'pdf' | 'csv'>('pdf');
@@ -96,19 +96,18 @@ export function ReportsPage() {
   }
 
   async function handleGenerate() {
-    setError('');
     setGenerating(true);
     try {
       await downloadCasesReport(buildFilterPayload());
+      notifySuccess(`Report downloaded as ${format.toUpperCase()}.`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Unable to generate the report. Please try again.');
+      notifyError(err, 'Unable to generate the report. Please try again.');
     } finally {
       setGenerating(false);
     }
   }
 
   async function handlePreview() {
-    setError('');
     setPreviewing(true);
     try {
       const blob = await previewCasesReport(buildFilterPayload());
@@ -121,7 +120,7 @@ export function ReportsPage() {
       setPreviewFormat(format);
       setPreviewOpen(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Unable to preview the report. Please try again.');
+      notifyError(err, 'Unable to preview the report. Please try again.');
     } finally {
       setPreviewing(false);
     }
@@ -198,13 +197,6 @@ export function ReportsPage() {
               </button>
             </div>
           </div>
-
-          {error && (
-            <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-              <AlertCircle size={15} className="shrink-0" />
-              <p className="text-sm">{error}</p>
-            </div>
-          )}
 
           <div className="flex gap-3">
             <button type="button" onClick={handlePreview} disabled={previewing}

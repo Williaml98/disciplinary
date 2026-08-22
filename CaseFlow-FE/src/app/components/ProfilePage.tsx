@@ -1,7 +1,9 @@
-import { useState } from 'react';
-import { Eye, EyeOff, CheckCircle, AlertCircle, BookOpen, Users, GraduationCap, Settings, Camera } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Eye, EyeOff, CheckCircle, AlertCircle, BookOpen, Users, GraduationCap, Settings, Camera, Trash2 } from 'lucide-react';
 import type { AppUser } from './mockData';
-import { updateUserProfile, changePassword, ApiError } from '../../lib/api';
+import { updateUserProfile, changePassword, uploadProfilePicture, removeProfilePicture } from '../../lib/api';
+import { Avatar } from './Avatar';
+import { notifyError, notifySuccess } from '../../lib/toast';
 
 interface Props {
   user: AppUser;
@@ -36,8 +38,9 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
   const [email, setEmail] = useState(user.email);
   const [extra, setExtra] = useState(user.studentId || user.department || '');
   const [profileErrors, setProfileErrors] = useState<Record<string, string>>({});
-  const [profileSuccess, setProfileSuccess] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [uploadingPicture, setUploadingPicture] = useState(false);
+  const pictureInputRef = useRef<HTMLInputElement>(null);
 
   // Password state
   const [currentPw, setCurrentPw] = useState('');
@@ -47,15 +50,36 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [pwErrors, setPwErrors] = useState<Record<string, string>>({});
-  const [pwSuccess, setPwSuccess] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
 
-  const initials = user.name.split(' ').map(n => n[0]).slice(0, 2).join('');
   const isStudent = user.role === 'student';
+
+  async function handlePictureUpload(file: File) {
+    setUploadingPicture(true);
+    try {
+      onUpdate(await uploadProfilePicture(user.id, file));
+      notifySuccess('Profile picture updated.');
+    } catch (err) {
+      notifyError(err, 'Unable to upload that image. Please try again.');
+    } finally {
+      setUploadingPicture(false);
+    }
+  }
+
+  async function handlePictureRemove() {
+    setUploadingPicture(true);
+    try {
+      onUpdate(await removeProfilePicture(user.id));
+      notifySuccess('Profile picture removed.');
+    } catch (err) {
+      notifyError(err, 'Unable to remove your profile picture.');
+    } finally {
+      setUploadingPicture(false);
+    }
+  }
 
   async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
-    setProfileSuccess(false);
     const errors: Record<string, string> = {};
     if (!name.trim()) errors.name = 'Name is required.';
     if (!email.trim()) errors.email = 'Email is required.';
@@ -72,10 +96,11 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
         ...(isStudent ? { studentId: extra.trim() } : { department: extra.trim() }),
       });
       onUpdate(updated);
-      setProfileSuccess(true);
-      setTimeout(() => setProfileSuccess(false), 4000);
+      notifySuccess('Profile updated.');
     } catch (err) {
-      setProfileErrors({ email: err instanceof ApiError ? err.message : 'Unable to save profile. Please try again.' });
+      // Toast rather than setProfileErrors({ email: ... }) — a server error about any field used to
+      // render under the Email input regardless of what it actually referred to.
+      notifyError(err, 'Unable to save profile. Please try again.');
     } finally {
       setSavingProfile(false);
     }
@@ -83,7 +108,6 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
 
   async function savePassword(e: React.FormEvent) {
     e.preventDefault();
-    setPwSuccess(false);
     const errors: Record<string, string> = {};
     if (!currentPw) errors.current = 'Please enter your current password.';
     if (!newPw) errors.new = 'New password is required.';
@@ -96,13 +120,15 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
     setSavingPassword(true);
     try {
       await changePassword(user.id, currentPw, newPw);
-      setPwSuccess(true);
       setCurrentPw('');
       setNewPw('');
       setConfirmPw('');
-      setTimeout(() => setPwSuccess(false), 4000);
+      notifySuccess('Password updated.', 'Use your new password next time you sign in.');
     } catch (err) {
-      setPwErrors({ current: err instanceof ApiError ? err.message : 'Unable to change password. Please try again.' });
+      // The server's message here is almost always "current password is incorrect", which does belong
+      // on that field — so show it inline as well as in the toast.
+      setPwErrors({ current: 'Check your current password and try again.' });
+      notifyError(err, 'Unable to change password. Please try again.');
     } finally {
       setSavingPassword(false);
     }
@@ -127,19 +153,43 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
         <div className="bg-white rounded-2xl border border-gray-200 p-6">
           <div className="flex items-center gap-5">
             <div className="relative shrink-0">
-              <div
-                className="w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl"
-                style={{ backgroundColor: '#1D3A5F' }}
+              <Avatar user={user} size={80} />
+              {/* This camera badge used to be decorative — no input, no handler. */}
+              <button
+                type="button"
+                onClick={() => pictureInputRef.current?.click()}
+                disabled={uploadingPicture}
+                aria-label="Change profile picture"
+                className="absolute -bottom-1 -right-1 w-7 h-7 bg-gray-100 border-2 border-white rounded-full flex items-center justify-center hover:bg-gray-200 disabled:opacity-60 transition-colors"
               >
-                {initials}
-              </div>
-              <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-gray-100 border-2 border-white rounded-full flex items-center justify-center">
-                <Camera size={11} className="text-gray-500" />
-              </div>
+                <Camera size={12} className="text-gray-600" />
+              </button>
+              <input
+                ref={pictureInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={e => {
+                  const file = e.target.files?.[0];
+                  // Reset so re-picking the same file still fires a change event.
+                  e.target.value = '';
+                  if (file) handlePictureUpload(file);
+                }}
+              />
             </div>
             <div className="min-w-0">
               <h2 className="text-xl text-gray-900 truncate">{user.name}</h2>
               <p className="text-sm text-gray-500 truncate mt-0.5">{user.email}</p>
+              {uploadingPicture && <p className="text-xs text-gray-400 mt-1">Updating picture…</p>}
+              {user.profilePictureUrl && !uploadingPicture && (
+                <button
+                  type="button"
+                  onClick={handlePictureRemove}
+                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-600 mt-1 transition-colors"
+                >
+                  <Trash2 size={11} /> Remove picture
+                </button>
+              )}
               <div className="flex items-center gap-2 mt-2 flex-wrap">
                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border ${ROLE_COLORS[user.role]}`}>
                   {ROLE_ICONS[user.role]}
@@ -163,13 +213,6 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
         {/* Personal information */}
         <div className="bg-white rounded-2xl border border-gray-200 p-6">
           <h3 className="text-sm font-semibold text-gray-700 mb-5">Personal Information</h3>
-
-          {profileSuccess && (
-            <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 rounded-xl px-4 py-3 mb-4">
-              <CheckCircle size={15} className="text-green-600 shrink-0" />
-              <p className="text-sm">Profile updated successfully.</p>
-            </div>
-          )}
 
           <form onSubmit={saveProfile} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -233,13 +276,6 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
         {/* Change password */}
         <div className="bg-white rounded-2xl border border-gray-200 p-6">
           <h3 className="text-sm font-semibold text-gray-700 mb-5">Change Password</h3>
-
-          {pwSuccess && (
-            <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 rounded-xl px-4 py-3 mb-4">
-              <CheckCircle size={15} className="text-green-600 shrink-0" />
-              <p className="text-sm">Password updated successfully.</p>
-            </div>
-          )}
 
           <form onSubmit={savePassword} className="space-y-4">
             <ProfileField label="Current Password" error={pwErrors.current}>

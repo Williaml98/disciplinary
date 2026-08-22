@@ -1,16 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FilePlus, List, ChevronRight, Paperclip, AlertCircle, Scale, ImagePlus, X, BarChart3 } from 'lucide-react';
 import { DashboardLayout, PageHeader, StatusBadge, EvidenceGallery } from './DashboardLayout';
 import { DisciplinaryRulesPage } from './DisciplinaryRulesPage';
 import { ReportsPage } from './ReportsPage';
 import { OFFENSE_TYPES } from './offenseTypes';
 import type { AppUser, DisciplinaryCase } from './mockData';
-import { reportCase, uploadEvidence, ApiError } from '../../lib/api';
+import { reportCase, uploadEvidence } from '../../lib/api';
+import { usePagedCases } from '../../lib/usePagedCases';
+import { Pagination } from './Pagination';
+import { notifyError, notifySuccess, toMessage, toast } from '../../lib/toast';
+
+/** A file staged for upload, paired with the blob URL used to preview it. */
+interface PendingEvidence {
+  file: File;
+  previewUrl: string;
+}
 
 interface Props {
   user: AppUser;
-  cases: DisciplinaryCase[];
-  setCases: React.Dispatch<React.SetStateAction<DisciplinaryCase[]>>;
   onLogout: () => void;
   onUpdateProfile: (updated: AppUser) => void;
 }
@@ -22,7 +29,7 @@ const navItems = [
   { id: 'reports', label: 'Reports', icon: <BarChart3 size={16} /> },
 ];
 
-export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdateProfile }: Props) {
+export function LecturerDashboard({ user, onLogout, onUpdateProfile }: Props) {
   const [activeNav, setActiveNav] = useState('report');
   const [form, setForm] = useState({
     studentName: '',
@@ -31,32 +38,49 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
     description: '',
     evidence: '',
   });
-  const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
+  // Each attachment carries its own preview URL, created once when the file is picked.
+  const [evidenceFiles, setEvidenceFiles] = useState<PendingEvidence[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState('');
   const [selectedCase, setSelectedCase] = useState<DisciplinaryCase | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const myCases = cases.filter(c => c.reportedBy === user.name);
+  // reportedByExact, not the report endpoint's substring match: "Marie Uwase" must not be shown the
+  // cases filed by "Dr. Marie Uwase".
+  const paged = usePagedCases({ reportedByExact: user.name }, { size: 20, sort: 'reportDate,desc' });
+  const myCases = paged.items;
 
-  const previewUrls = useMemo(() => evidenceFiles.map(f => URL.createObjectURL(f)), [evidenceFiles]);
-  useEffect(() => {
-    return () => previewUrls.forEach(url => URL.revokeObjectURL(url));
-  }, [previewUrls]);
+  // Revoke whatever is still outstanding when the component goes away. Individual URLs are revoked
+  // as their file is removed; this only catches the ones still on screen at unmount.
+  const outstandingUrls = useRef<string[]>([]);
+  outstandingUrls.current = evidenceFiles.map(f => f.previewUrl);
+  useEffect(() => () => outstandingUrls.current.forEach(URL.revokeObjectURL), []);
 
   function addEvidenceFiles(fileList: FileList | null) {
-    if (!fileList) return;
-    setEvidenceFiles(prev => [...prev, ...Array.from(fileList)]);
+    if (!fileList || fileList.length === 0) return;
+    // Snapshot eagerly. A FileList is a *live* view of the input element, and the change handler
+    // clears input.value immediately after calling this — which empties that same FileList in place.
+    // Reading it inside the setState updater (which React runs later) therefore saw zero files, so
+    // nothing was ever added and no thumbnail appeared.
+    const added = Array.from(fileList).map(file => ({
+      file,
+      // Created once per file rather than recreated for the whole list on every change, so a preview
+      // URL stays stable for as long as its file is attached.
+      previewUrl: URL.createObjectURL(file),
+    }));
+    setEvidenceFiles(prev => [...prev, ...added]);
   }
 
   function removeEvidenceFile(index: number) {
-    setEvidenceFiles(prev => prev.filter((_, i) => i !== index));
+    setEvidenceFiles(prev => {
+      const removed = prev[index];
+      if (removed) URL.revokeObjectURL(removed.previewUrl);
+      return prev.filter((_, i) => i !== index);
+    });
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitError('');
     setSubmitting(true);
     try {
       let newCase = await reportCase({
@@ -68,30 +92,43 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
         description: form.description,
         evidence: form.evidence,
       });
+      let uploadFailure = '';
       if (evidenceFiles.length > 0) {
         try {
-          newCase = await uploadEvidence(newCase.id, evidenceFiles, user.name);
+          newCase = await uploadEvidence(newCase.id, evidenceFiles.map(e => e.file), user.name);
         } catch (uploadErr) {
-          setSubmitError(
-            uploadErr instanceof ApiError
-              ? `Case ${newCase.id} was created, but the evidence photos failed to upload: ${uploadErr.message}`
-              : `Case ${newCase.id} was created, but the evidence photos failed to upload.`
-          );
+          uploadFailure = toMessage(uploadErr, 'the upload was rejected');
         }
       }
-      setCases(prev => [newCase, ...prev]);
+      // Reload rather than prepending: whether the new case belongs on the current page depends on the
+      // sort and filters, and a reload is unconditionally right. It also ticks the badge over.
+      paged.reload();
       setSubmitted(true);
       setForm({ studentName: '', studentId: '', offenseType: '', description: '', evidence: '' });
-      setEvidenceFiles([]);
+      setEvidenceFiles(prev => {
+        prev.forEach(e => URL.revokeObjectURL(e.previewUrl));
+        return [];
+      });
       setTimeout(() => setSubmitted(false), 5000);
+
+      // A partial success: the case exists, so this is a warning about the attachments rather than a
+      // failure of the report itself. Saying only "failed" would be wrong — the case is filed.
+      if (uploadFailure) {
+        toast.warning(`Case ${newCase.id} was filed without its attachments.`, {
+          description: `The evidence files could not be uploaded: ${uploadFailure}`,
+        });
+      } else {
+        notifySuccess(`Case ${newCase.id} filed.`, 'The disciplinary committee has been notified.');
+      }
     } catch (err) {
-      setSubmitError(err instanceof ApiError ? err.message : 'Unable to submit the report. Please try again.');
+      notifyError(err, 'Unable to submit the report. Please try again.');
     } finally {
       setSubmitting(false);
     }
   }
 
-  const myCaseBadge = myCases.length;
+  // Global count from the server, so the badge stays right regardless of which page is loaded.
+  const myCaseBadge = paged.totalElements;
 
   return (
     <DashboardLayout
@@ -114,12 +151,6 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
                     <p className="font-medium text-sm">Incident reported successfully</p>
                     <p className="text-xs mt-0.5 text-green-700">The case has been created and the disciplinary committee has been notified.</p>
                   </div>
-                </div>
-              )}
-              {submitError && (
-                <div className="mb-6 bg-red-50 border border-red-200 text-red-800 rounded-xl p-4 flex items-center gap-3">
-                  <AlertCircle size={18} className="text-red-600 shrink-0" />
-                  <p className="text-sm">{submitError}</p>
                 </div>
               )}
               <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
@@ -211,9 +242,9 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
                       </button>
                       {evidenceFiles.length > 0 && (
                         <div className="flex flex-wrap gap-3 mt-3">
-                          {evidenceFiles.map((file, i) => (
-                            <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 shrink-0">
-                              <img src={previewUrls[i]} alt={file.name} className="w-full h-full object-cover" />
+                          {evidenceFiles.map((item, i) => (
+                            <div key={item.previewUrl} className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 shrink-0">
+                              <img src={item.previewUrl} alt={item.file.name} className="w-full h-full object-cover" />
                               <button
                                 type="button"
                                 onClick={() => removeEvidenceFile(i)}
@@ -253,7 +284,7 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
         <>
           <PageHeader
             title="My Reported Cases"
-            subtitle={`${myCases.length} case${myCases.length !== 1 ? 's' : ''} submitted by you`}
+            subtitle={`${paged.totalElements} case${paged.totalElements !== 1 ? 's' : ''} submitted by you`}
           />
           {selectedCase ? (
             <div className="flex-1 overflow-y-auto p-4 sm:p-8">
@@ -267,7 +298,14 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
             </div>
           ) : (
             <div className="flex-1 overflow-y-auto p-4 sm:p-8">
-              {myCases.length === 0 ? (
+              {paged.loading && myCases.length === 0 ? (
+                <p className="text-center py-16 text-sm text-gray-400">Loading your cases…</p>
+              ) : paged.error ? (
+                <div className="max-w-3xl mx-auto flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                  <AlertCircle size={15} className="shrink-0" />
+                  <p className="text-sm">{paged.error}</p>
+                </div>
+              ) : myCases.length === 0 ? (
                 <div className="text-center py-16 text-gray-400">
                   <FilePlus size={40} className="mx-auto mb-3 opacity-30" />
                   <p className="text-sm">No cases reported yet.</p>
@@ -294,6 +332,17 @@ export function LecturerDashboard({ user, cases, setCases, onLogout, onUpdatePro
                       </div>
                     </button>
                   ))}
+                  <div className="bg-white border border-gray-200 rounded-2xl">
+                    <Pagination
+                      page={paged.page}
+                      totalPages={paged.totalPages}
+                      totalElements={paged.totalElements}
+                      first={paged.first}
+                      last={paged.last}
+                      onPageChange={paged.setPage}
+                      label="case"
+                    />
+                  </div>
                 </div>
               )}
             </div>

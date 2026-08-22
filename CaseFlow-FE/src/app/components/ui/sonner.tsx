@@ -1,25 +1,29 @@
-"use client";
+import { Toaster as Sonner, type ToasterProps } from 'sonner';
 
-import { useTheme } from "next-themes";
-import { Toaster as Sonner, ToasterProps } from "sonner";
+// Rewritten from the stock shadcn version, which read the theme from next-themes. Nothing in this app
+// mounts a ThemeProvider and the UI is light-only, so that import was a dependency on a provider that
+// never existed. Colours come from the brand navy rather than theme.css's stock shadcn --primary.
+const NAVY = '#1D3A5F';
 
-const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme();
-
+export function Toaster(props: ToasterProps) {
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
-      className="toaster group"
-      style={
-        {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
-        } as React.CSSProperties
-      }
+      theme="light"
+      position="top-right"
+      richColors
+      closeButton
+      toastOptions={{
+        style: {
+          borderRadius: '12px',
+          fontSize: '14px',
+        },
+        classNames: {
+          toast: 'shadow-lg',
+          actionButton: 'rounded-lg',
+        },
+      }}
+      style={{ ['--normal-border' as string]: `${NAVY}20` }}
       {...props}
     />
   );
-};
-
-export { Toaster };
+}

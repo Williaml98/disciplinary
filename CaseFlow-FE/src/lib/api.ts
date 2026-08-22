@@ -1,14 +1,19 @@
 import { API_BASE_URL } from '../config';
 import type {
   AppUser,
-  DisciplinaryCase,
-  Note,
-  AuditEntry,
-  Role,
+  AppealStatus,
+  AuditFeedEntry,
+  CaseStats,
   CaseStatus,
   DecisionType,
+  DisciplinaryCase,
+  MonthlyCaseCount,
+  Note,
+  AuditEntry,
   RegistrationStatus,
-  AppealStatus,
+  Role,
+  UserImpact,
+  UserStats,
 } from '../app/components/mockData';
 
 export class ApiError extends Error {
@@ -75,18 +80,39 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
 
   if (!res.ok) {
-    let message = res.statusText;
-    try {
-      const body = await res.json();
-      if (body?.message) message = body.message;
-    } catch {
-      // response had no JSON body
-    }
-    throw new ApiError(res.status, message);
+    throw new ApiError(res.status, await errorMessage(res));
   }
 
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+/**
+ * Multipart sibling of request(). Kept separate because FormData must NOT get a Content-Type header —
+ * the browser has to set it itself so it can append the multipart boundary. Shared by evidence and
+ * profile-picture uploads so their auth and error handling can't drift apart.
+ */
+async function requestFormData<T>(path: string, body: FormData): Promise<T> {
+  const res = await fetch(`${API_BASE_URL}${path}`, { method: 'POST', headers: authHeader(), body });
+  if (res.status === 401) {
+    clearToken();
+    onUnauthorized?.();
+  }
+  if (!res.ok) {
+    throw new ApiError(res.status, await errorMessage(res));
+  }
+  return res.json() as Promise<T>;
+}
+
+/** Server error bodies are {"message": "..."}; fall back to the status text when there's no body. */
+async function errorMessage(res: Response): Promise<string> {
+  try {
+    const body = await res.json();
+    if (body?.message) return body.message as string;
+  } catch {
+    // response had no JSON body
+  }
+  return res.statusText;
 }
 
 // ---- Wire shapes (raw JSON as returned by CaseFlow-BE) ----
@@ -97,6 +123,31 @@ interface UserDto {
   department: string | null;
   studentId: string | null;
   email: string;
+  active: boolean;
+  mustChangePassword: boolean;
+  profilePictureUrl: string | null;
+}
+
+/** Envelope returned by every paginated endpoint. Mirrors the backend's PageResponse record. */
+export interface Page<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+}
+
+interface AuditFeedEntryDto {
+  kind: 'CASE' | 'USER';
+  id: number;
+  action: string;
+  by: string;
+  timestamp: string;
+  caseId: string | null;
+  targetUserId: number | null;
+  targetUserName: string | null;
 }
 
 interface NoteDto {
@@ -157,7 +208,42 @@ function mapUser(dto: UserDto): AppUser {
     department: dto.department ?? undefined,
     studentId: dto.studentId ?? undefined,
     email: dto.email,
+    active: dto.active,
+    mustChangePassword: dto.mustChangePassword,
+    // Same convention as evidence files: the backend returns a path, we prefix the API origin.
+    profilePictureUrl: dto.profilePictureUrl ? `${API_BASE_URL}${dto.profilePictureUrl}` : undefined,
   };
+}
+
+function mapAuditFeedEntry(dto: AuditFeedEntryDto): AuditFeedEntry {
+  return {
+    kind: dto.kind,
+    id: dto.id,
+    action: dto.action,
+    by: dto.by,
+    timestamp: formatTimestamp(dto.timestamp),
+    caseId: dto.caseId ?? undefined,
+    targetUserId: dto.targetUserId === null ? undefined : String(dto.targetUserId),
+    targetUserName: dto.targetUserName ?? undefined,
+  };
+}
+
+function mapPage<D, T>(page: Page<D>, mapItem: (dto: D) => T): Page<T> {
+  return { ...page, content: page.content.map(mapItem) };
+}
+
+/** Drops empty values and expands arrays into repeated keys (?status=A&status=B). */
+function toQuery(params: Record<string, string | number | boolean | string[] | undefined>): string {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === '') return;
+    if (Array.isArray(value)) {
+      value.forEach(v => v !== '' && query.append(key, v));
+    } else {
+      query.append(key, String(value));
+    }
+  });
+  return query.toString();
 }
 
 function mapNote(dto: NoteDto): Note {
@@ -215,6 +301,7 @@ export async function verifyRegistrationOtp(email: string, otp: string): Promise
 export async function register(payload: {
   name: string;
   studentId: string;
+  department: string;
   email: string;
   password: string;
   otp: string;
@@ -242,17 +329,39 @@ export async function resetPassword(email: string, otp: string, newPassword: str
 }
 
 // ---- Users ----
-export async function fetchUsers(): Promise<AppUser[]> {
-  return (await request<UserDto[]>('/users')).map(mapUser);
+export interface UserQuery {
+  search?: string;
+  role?: Role;
+  active?: boolean;
+  page?: number;
+  size?: number;
+  sort?: string;
 }
 
+export async function fetchUsersPage(query: UserQuery = {}): Promise<Page<AppUser>> {
+  return mapPage(await request<Page<UserDto>>(`/users?${toQuery({ ...query })}`), mapUser);
+}
+
+export async function fetchUserStats(): Promise<UserStats> {
+  return request<UserStats>('/users/stats');
+}
+
+/** What deleting this account would orphan — cases reference people by name, not by foreign key. */
+export async function fetchUserImpact(id: string): Promise<UserImpact> {
+  return request<UserImpact>(`/users/${id}/impact`);
+}
+
+/**
+ * The backend generates and emails a temporary password for admin-created accounts, so no password is
+ * sent from here. (The `password` field still exists on the request for the zero-users bootstrap path,
+ * which the UI never exercises.)
+ */
 export async function createUser(payload: {
   name: string;
   role: Role;
   department?: string;
   studentId?: string;
   email: string;
-  password: string;
 }): Promise<AppUser> {
   return mapUser(await request<UserDto>('/users', { method: 'POST', body: JSON.stringify(payload) }));
 }
@@ -270,6 +379,24 @@ export async function updateUserRole(id: string, role: Role): Promise<AppUser> {
   return mapUser(await request<UserDto>(`/users/${id}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }));
 }
 
+export async function updateUserStatus(id: string, active: boolean): Promise<AppUser> {
+  return mapUser(await request<UserDto>(`/users/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ active }),
+  }));
+}
+
+/** Multipart, so it bypasses request() the same way uploadEvidence does. */
+export async function uploadProfilePicture(id: string, file: File): Promise<AppUser> {
+  const body = new FormData();
+  body.append('file', file);
+  return mapUser(await requestFormData<UserDto>(`/users/${id}/picture`, body));
+}
+
+export async function removeProfilePicture(id: string): Promise<AppUser> {
+  return mapUser(await request<UserDto>(`/users/${id}/picture`, { method: 'DELETE' }));
+}
+
 export async function changePassword(id: string, currentPassword: string, newPassword: string): Promise<void> {
   await request<UserDto>(`/users/${id}/password`, {
     method: 'POST',
@@ -282,8 +409,61 @@ export async function deleteUser(id: string): Promise<void> {
 }
 
 // ---- Cases ----
-export async function fetchCases(): Promise<DisciplinaryCase[]> {
-  return (await request<CaseDto[]>('/cases')).map(mapCase);
+export interface CaseQuery {
+  search?: string;
+  status?: CaseStatus[];
+  registrationStatus?: RegistrationStatus;
+  offenseType?: string;
+  decision?: DecisionType;
+  reporterDepartment?: string;
+  reportedByExact?: string;
+  reportDateFrom?: string;
+  reportDateTo?: string;
+  suspensionEndFrom?: string;
+  suspensionEndTo?: string;
+  page?: number;
+  size?: number;
+  sort?: string;
+}
+
+export async function fetchCasesPage(query: CaseQuery = {}): Promise<Page<DisciplinaryCase>> {
+  return mapPage(await request<Page<CaseDto>>(`/cases?${toQuery({ ...query })}`), mapCase);
+}
+
+export async function fetchCase(id: string): Promise<DisciplinaryCase> {
+  return mapCase(await request<CaseDto>(`/cases/${id}`));
+}
+
+/**
+ * Global counts for dashboard badges and stat tiles.
+ *
+ * <p>Separate from a list's totalElements on purpose: a badge answers "how many exist", while
+ * totalElements answers "how many match the current view" — computing badges from a page would make
+ * them silently wrong.
+ */
+export async function fetchCaseStats(): Promise<CaseStats> {
+  return request<CaseStats>('/cases/stats');
+}
+
+export async function fetchMonthlyCaseCounts(): Promise<MonthlyCaseCount[]> {
+  return request<MonthlyCaseCount[]>('/cases/stats/monthly');
+}
+
+export async function fetchAuditFeed(query: { kind?: 'CASE' | 'USER'; page?: number; size?: number } = {}):
+    Promise<Page<AuditFeedEntry>> {
+  return mapPage(await request<Page<AuditFeedEntryDto>>(`/audit?${toQuery({ ...query })}`), mapAuditFeedEntry);
+}
+
+/** Legal next statuses from the case's current one, so the UI never offers a move the server rejects. */
+export async function fetchAllowedStatuses(caseId: string): Promise<CaseStatus[]> {
+  return request<CaseStatus[]>(`/cases/${caseId}/allowed-statuses`);
+}
+
+export async function updateCaseStatus(caseId: string, status: CaseStatus, by: string): Promise<DisciplinaryCase> {
+  return mapCase(await request<CaseDto>(`/cases/${caseId}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status, by }),
+  }));
 }
 
 export async function reportCase(payload: {
@@ -302,23 +482,7 @@ export async function uploadEvidence(caseId: string, files: File[], by?: string)
   const body = new FormData();
   files.forEach(file => body.append('files', file));
   if (by) body.append('by', by);
-
-  const res = await fetch(`${API_BASE_URL}/cases/${caseId}/evidence`, { method: 'POST', headers: authHeader(), body });
-  if (res.status === 401) {
-    clearToken();
-    onUnauthorized?.();
-  }
-  if (!res.ok) {
-    let message = res.statusText;
-    try {
-      const errBody = await res.json();
-      if (errBody?.message) message = errBody.message;
-    } catch {
-      // response had no JSON body
-    }
-    throw new ApiError(res.status, message);
-  }
-  return mapCase(await res.json() as CaseDto);
+  return mapCase(await requestFormData<CaseDto>(`/cases/${caseId}/evidence`, body));
 }
 
 export async function addCaseNote(caseId: string, author: string, text: string): Promise<DisciplinaryCase> {
@@ -377,14 +541,7 @@ async function fetchBlob(path: string, fallbackFilename: string): Promise<{ blob
     onUnauthorized?.();
   }
   if (!res.ok) {
-    let message = res.statusText;
-    try {
-      const body = await res.json();
-      if (body?.message) message = body.message;
-    } catch {
-      // response had no JSON body
-    }
-    throw new ApiError(res.status, message);
+    throw new ApiError(res.status, await errorMessage(res));
   }
 
   const blob = await res.blob();

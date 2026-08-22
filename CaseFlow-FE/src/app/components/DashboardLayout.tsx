@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { LogOut, Menu, X, UserCircle } from 'lucide-react';
+import { LogOut, Menu, X, UserCircle, FileText } from 'lucide-react';
 import type { AppUser } from './mockData';
+import { Avatar } from './Avatar';
 import { ProfilePage } from './ProfilePage';
 import logo from '../../imports/logo.png';
 
@@ -70,9 +71,12 @@ export function DashboardLayout({ user, onLogout, onUpdateProfile, navItems, act
           className={`w-full text-left rounded-xl p-3 transition-colors group ${showProfile ? 'bg-white/20' : 'bg-white/10 hover:bg-white/15'}`}
         >
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0 group-hover:ring-2 group-hover:ring-white/30 transition-all">
-              <span className="text-xs font-bold">{user.name.split(' ').map(n => n[0]).slice(0, 2).join('')}</span>
-            </div>
+            <Avatar
+              user={user}
+              size={32}
+              variant="translucent"
+              className="group-hover:ring-2 group-hover:ring-white/30 transition-all"
+            />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium leading-tight truncate">{user.name}</p>
               <p className="text-white/50 text-xs mt-0.5">{roleLabels[user.role]}</p>
@@ -166,8 +170,10 @@ export function DashboardLayout({ user, onLogout, onUpdateProfile, navItems, act
             <span className="font-semibold text-sm">CaseFlow</span>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={handleOpenProfile} className="text-white/70 hover:text-white p-1">
-              <UserCircle size={20} />
+            <button onClick={handleOpenProfile} className="text-white/70 hover:text-white p-1" aria-label="Open profile">
+              {user.profilePictureUrl
+                ? <Avatar user={user} size={24} variant="translucent" />
+                : <UserCircle size={20} />}
             </button>
             <button onClick={() => setSidebarOpen(true)} className="text-white/80 hover:text-white p-1">
               <Menu size={22} />
@@ -202,22 +208,52 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
   );
 }
 
+/**
+ * Evidence thumbnails. `files` are already absolute URLs — api.ts prefixes the API origin onto the
+ * relative path the backend returns, so nothing here needs to know where the backend lives.
+ *
+ * PDFs are allowed as evidence alongside images, and an <img> cannot render one, so non-image
+ * attachments get a document card instead.
+ */
 export function EvidenceGallery({ files }: { files: string[] }) {
   if (files.length === 0) return null;
   return (
     <div className="flex flex-wrap gap-3 mt-3">
       {files.map((url, i) => (
-        <a
-          key={url}
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block w-20 h-20 rounded-lg overflow-hidden border border-gray-200 hover:border-[#1D3A5F]/40 transition-colors shrink-0"
-        >
-          <img src={url} alt={`Evidence ${i + 1}`} className="w-full h-full object-cover" />
-        </a>
+        <EvidenceThumbnail key={url} url={url} index={i} />
       ))}
     </div>
+  );
+}
+
+function EvidenceThumbnail({ url, index }: { url: string; index: number }) {
+  const [failed, setFailed] = useState(false);
+  const isPdf = url.toLowerCase().endsWith('.pdf');
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={isPdf ? `Evidence document ${index + 1} (PDF)` : `Evidence ${index + 1}`}
+      className="block w-20 h-20 rounded-lg overflow-hidden border border-gray-200 hover:border-[#1D3A5F]/40 transition-colors shrink-0"
+    >
+      {isPdf || failed ? (
+        // Also covers a file that 404s or fails to decode: a labelled card is more useful than the
+        // browser's broken-image glyph, which gives the viewer nothing to act on.
+        <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-gray-50 text-gray-500">
+          <FileText size={20} />
+          <span className="text-[10px] font-medium">{isPdf ? 'PDF' : 'Unavailable'}</span>
+        </div>
+      ) : (
+        <img
+          src={url}
+          alt={`Evidence ${index + 1}`}
+          onError={() => setFailed(true)}
+          className="w-full h-full object-cover"
+        />
+      )}
+    </a>
   );
 }
 
