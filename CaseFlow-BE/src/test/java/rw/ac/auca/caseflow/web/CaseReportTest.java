@@ -1,7 +1,9 @@
 package rw.ac.auca.caseflow.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDate;
@@ -107,5 +109,53 @@ class CaseReportTest extends AbstractApiTest {
         mockMvc.perform(get("/api/cases/report").param("format", "xml")
                         .header("Authorization", authHeader(admin)))
                 .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * Regression: enum query parameters used to bind via Enum.valueOf(), which ignores the wire values
+     * these enums expose to Jackson — so the Reports page's status filter was a silent 400.
+     */
+    @Test
+    void report_filtersByStatusUsingWireValue() throws Exception {
+        createCase("CF-RPT-006", "60007", "Theft", LocalDate.of(2026, 3, 1), "Dr. D", "CS");
+        DisciplinaryCase reviewed = createCase("CF-RPT-007", "60008", "Theft", LocalDate.of(2026, 3, 1), "Dr. D", "CS");
+        reviewed.setStatus(CaseStatus.UNDER_REVIEW);
+        caseRepository.save(reviewed);
+        AppUser admin = createUser("Report Admin Three", "reportadmin3@auca.ac.rw", Role.ADMIN, null);
+
+        MvcResult result = mockMvc.perform(get("/api/cases/report")
+                        .param("format", "csv")
+                        .param("status", "Under Review")
+                        .header("Authorization", authHeader(admin)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String csv = result.getResponse().getContentAsString();
+        assertThat(csv).contains("CF-RPT-007");
+        assertThat(csv).doesNotContain("CF-RPT-006");
+    }
+
+    /** The raw enum constant name is accepted too, so a caller sending UNDER_REVIEW isn't rejected. */
+    @Test
+    void report_filtersByStatusUsingEnumConstantName() throws Exception {
+        AppUser admin = createUser("Report Admin Four", "reportadmin4@auca.ac.rw", Role.ADMIN, null);
+
+        mockMvc.perform(get("/api/cases/report")
+                        .param("format", "csv")
+                        .param("status", "UNDER_REVIEW")
+                        .header("Authorization", authHeader(admin)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void report_withUnknownStatus_returnsBadRequestNamingTheValidValues() throws Exception {
+        AppUser admin = createUser("Report Admin Five", "reportadmin5@auca.ac.rw", Role.ADMIN, null);
+
+        mockMvc.perform(get("/api/cases/report")
+                        .param("format", "csv")
+                        .param("status", "Nonsense")
+                        .header("Authorization", authHeader(admin)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("Under Review")));
     }
 }

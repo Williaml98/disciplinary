@@ -7,6 +7,8 @@ import org.springframework.data.jpa.domain.Specification;
 import rw.ac.auca.caseflow.domain.CaseStatus;
 import rw.ac.auca.caseflow.domain.DecisionType;
 import rw.ac.auca.caseflow.domain.DisciplinaryCase;
+import rw.ac.auca.caseflow.domain.RegistrationStatus;
+import rw.ac.auca.caseflow.domain.Role;
 
 // Builds a single combined Specification from whichever report filters were actually supplied —
 // every field here is optional and AND'ed together with whatever else was set.
@@ -48,6 +50,80 @@ public final class CaseSpecifications {
         return predicates.stream().reduce(Specification::and).orElse((root, query, cb) -> cb.conjunction());
     }
 
+    // ---- Additional predicates for the paginated list endpoint ----
+    // Every predicate in this class touches only root scalar columns. That matters: no joins means no
+    // cartesian product, which means Spring Data's generated count query is accurate without DISTINCT
+    // and pagination can't return short pages. A predicate that joined notes or auditTrail would break
+    // both — add one only with a corresponding fix to the count query.
+
+    /** Free-text search across the fields the case tables let you search on. */
+    public static Specification<DisciplinaryCase> search(String search) {
+        if (search == null || search.isBlank()) {
+            return (root, query, cb) -> cb.conjunction();
+        }
+        String like = "%" + escapeLike(search.toLowerCase()) + "%";
+        return (root, query, cb) -> cb.or(
+                cb.like(cb.lower(root.get("studentName")), like, '\\'),
+                cb.like(cb.lower(root.get("studentId")), like, '\\'),
+                cb.like(cb.lower(root.get("id")), like, '\\'),
+                cb.like(cb.lower(root.get("offenseType")), like, '\\'));
+    }
+
+    /** Multi-valued status, for the committee queue (Reported OR Under Review). */
+    public static Specification<DisciplinaryCase> statusIn(List<CaseStatus> statuses) {
+        if (statuses == null || statuses.isEmpty()) {
+            return (root, query, cb) -> cb.conjunction();
+        }
+        return (root, query, cb) -> root.get("status").in(statuses);
+    }
+
+    public static Specification<DisciplinaryCase> registrationStatus(RegistrationStatus status) {
+        return status == null
+                ? (root, query, cb) -> cb.conjunction()
+                : (root, query, cb) -> cb.equal(root.get("registrationStatus"), status);
+    }
+
+    /**
+     * Exact match, unlike {@code matching()}'s {@code reportedBy}, which is a substring LIKE for report
+     * filtering. The lecturer's "my cases" list must not widen: a substring match would show
+     * "Marie Uwase" the cases filed by "Dr. Marie Uwase".
+     */
+    public static Specification<DisciplinaryCase> reportedByExactly(String name) {
+        return name == null || name.isBlank()
+                ? (root, query, cb) -> cb.conjunction()
+                : (root, query, cb) -> cb.equal(root.get("reportedBy"), name);
+    }
+
+    public static Specification<DisciplinaryCase> suspensionEndBetween(LocalDate from, LocalDate to) {
+        List<Specification<DisciplinaryCase>> predicates = new ArrayList<>();
+        if (from != null) {
+            predicates.add((root, query, cb) -> cb.greaterThanOrEqualTo(root.get("suspensionEnd"), from));
+        }
+        if (to != null) {
+            predicates.add((root, query, cb) -> cb.lessThanOrEqualTo(root.get("suspensionEnd"), to));
+        }
+        return predicates.stream().reduce(Specification::and).orElse((root, query, cb) -> cb.conjunction());
+    }
+
+    /**
+     * The single authorization choke point for case visibility. Folding the student scoping into the
+     * spec chain means it composes with every other filter automatically and cannot be forgotten at a
+     * new call site — unlike the controller-level {@code if} it replaces.
+     *
+     * <p>A STUDENT with no studentId matches nothing: {@code cb.equal(x, null)} renders as {@code = NULL},
+     * which is never true. That fail-closed behaviour is intentional.
+     */
+    public static Specification<DisciplinaryCase> visibleTo(Role callerRole, String callerStudentId) {
+        return callerRole != Role.STUDENT
+                ? (root, query, cb) -> cb.conjunction()
+                : (root, query, cb) -> cb.equal(root.get("studentId"), callerStudentId);
+    }
+
+    /** Otherwise a search containing % or _ silently behaves as a wildcard. */
+    private static String escapeLike(String value) {
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
+
     public record CaseReportFilters(
             LocalDate reportDateFrom,
             LocalDate reportDateTo,
@@ -60,15 +136,17 @@ public final class CaseSpecifications {
         public String describe() {
             List<String> parts = new ArrayList<>();
             if (reportDateFrom != null || reportDateTo != null) {
-                parts.add("Date: " + (reportDateFrom == null ? "…" : reportDateFrom)
-                        + " to " + (reportDateTo == null ? "…" : reportDateTo));
+                // Spelled out rather than using an ellipsis: the PDF renders in Helvetica, a WinAnsi
+                // core font with no glyph for U+2026, so "…" came out blank on an open-ended range.
+                parts.add("Date: " + (reportDateFrom == null ? "any" : reportDateFrom)
+                        + " to " + (reportDateTo == null ? "any" : reportDateTo));
             }
             if (offenseType != null && !offenseType.isBlank()) parts.add("Offense: " + offenseType);
             if (status != null) parts.add("Status: " + status.wireValue());
             if (decision != null) parts.add("Decision: " + decision.wireValue());
             if (reporterDepartment != null && !reporterDepartment.isBlank()) parts.add("Department: " + reporterDepartment);
             if (reportedBy != null && !reportedBy.isBlank()) parts.add("Reported by: " + reportedBy);
-            return parts.isEmpty() ? "Filters: none (all cases)" : "Filters: " + String.join(" · ", parts);
+            return parts.isEmpty() ? "None - all cases included" : String.join("   |   ", parts);
         }
     }
 }

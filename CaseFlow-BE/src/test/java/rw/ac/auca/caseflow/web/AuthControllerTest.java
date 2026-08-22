@@ -93,11 +93,14 @@ class AuthControllerTest extends AbstractApiTest {
         mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "name", "New Student", "studentId", "99999",
+                                "department", "Information Technology",
                                 "email", email, "password", "SecurePass123!", "otp", code))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").isNotEmpty())
                 .andExpect(jsonPath("$.user.role").value("student"))
-                .andExpect(jsonPath("$.user.email").value(email));
+                .andExpect(jsonPath("$.user.email").value(email))
+                // Registration used to hardcode department to null regardless of what was submitted.
+                .andExpect(jsonPath("$.user.department").value("Information Technology"));
 
         assertThat(userRepository.existsByEmailIgnoreCase(email)).isTrue();
     }
@@ -112,6 +115,7 @@ class AuthControllerTest extends AbstractApiTest {
         mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "name", "New Student", "studentId", "99998",
+                                "department", "Information Technology",
                                 "email", email, "password", "SecurePass123!", "otp", "000000"))))
                 .andExpect(status().isBadRequest());
 

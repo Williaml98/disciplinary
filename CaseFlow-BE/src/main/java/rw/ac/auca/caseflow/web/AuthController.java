@@ -53,6 +53,11 @@ public class AuthController {
         AppUser user = userRepository.findByEmailIgnoreCase(request.email())
                 .filter(u -> passwordEncoder.matches(request.password(), u.getPasswordHash()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password"));
+        // Checked only after the password matches, so this can't be used to probe which addresses exist.
+        if (!user.isActive()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "This account has been deactivated. Please contact the Registrar's office.");
+        }
         return new AuthResponse(jwtService.generateToken(user, request.remember()), UserResponse.from(user));
     }
 
@@ -81,7 +86,7 @@ public class AuthController {
         AppUser user = new AppUser(
                 request.name(),
                 Role.STUDENT,
-                null,
+                request.department(),
                 request.studentId(),
                 request.email(),
                 passwordEncoder.encode(request.password())
@@ -105,6 +110,10 @@ public class AuthController {
         otpService.verifyCode(RESET_PASSWORD_PURPOSE, request.email(), request.otp());
         otpService.consume(RESET_PASSWORD_PURPOSE, request.email());
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        // The user has just chosen their own password, so any admin-issued temporary one is spent.
+        // Without this, someone who used "Forgot password" instead of the forced-change screen would
+        // set a real password and then immediately be forced to change it again.
+        user.setMustChangePassword(false);
         AppUser saved = userRepository.save(user);
         return new AuthResponse(jwtService.generateToken(saved, false), UserResponse.from(saved));
     }

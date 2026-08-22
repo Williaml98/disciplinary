@@ -36,7 +36,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register",
                                 "/api/auth/register/otp", "/api/auth/register/otp/verify",
                                 "/api/auth/password/reset/otp", "/api/auth/password/reset").permitAll()
+                        // Both are fetched by plain <img> tags, which cannot attach an Authorization
+                        // header — so requiring auth here doesn't secure them, it just makes every
+                        // image fail to load. The filenames are unguessable server-generated UUIDs,
+                        // which is the actual protection.
                         .requestMatchers(HttpMethod.GET, "/api/cases/*/evidence/*").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/users/*/picture/*").permitAll()
                         // Open only while the database has zero users — see UserController.createUser.
                         .requestMatchers(HttpMethod.POST, "/api/users").permitAll()
                         .anyRequest().authenticated()

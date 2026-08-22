@@ -52,8 +52,9 @@ class CaseControllerAuthorizationTest extends AbstractApiTest {
 
         mockMvc.perform(get("/api/cases").header("Authorization", authHeader(student)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].id").value("CF-TEST-001"));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].id").value("CF-TEST-001"))
+                .andExpect(jsonPath("$.totalElements").value(1));
     }
 
     @Test
@@ -64,7 +65,8 @@ class CaseControllerAuthorizationTest extends AbstractApiTest {
 
         mockMvc.perform(get("/api/cases").header("Authorization", authHeader(lecturer)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)));
+                .andExpect(jsonPath("$.content", hasSize(2)))
+                .andExpect(jsonPath("$.totalElements").value(2));
     }
 
     @Test
@@ -164,7 +166,27 @@ class CaseControllerAuthorizationTest extends AbstractApiTest {
                         .content(objectMapper.writeValueAsString(Map.of("decision", "Warning", "by", "Committee Three"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.decision").value("Warning"))
-                .andExpect(jsonPath("$.status").value("Decided"));
+                // A warning has nothing left to happen, so it resolves on the spot. These used to sit
+                // on Decided forever: no path to Resolved existed for a non-suspension decision.
+                .andExpect(jsonPath("$.status").value("Resolved"))
+                .andExpect(jsonPath("$.registrationStatus").value("Active"));
+    }
+
+    @Test
+    void recordDecision_forSuspension_staysDecidedUntilReintegration() throws Exception {
+        createCase("CF-TEST-009B", "20099");
+        AppUser committee = createUser("Committee Susp", "commsusp@auca.ac.rw", Role.COMMITTEE, null);
+
+        mockMvc.perform(post("/api/cases/CF-TEST-009B/decision").header("Authorization", authHeader(committee))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "decision", "Semester Suspension",
+                                "suspensionStart", "2026-09-01",
+                                "suspensionEnd", "2026-12-31",
+                                "by", "Committee Susp"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("Decided"))
+                .andExpect(jsonPath("$.registrationStatus").value("Restricted"));
     }
 
     @Test
