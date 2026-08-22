@@ -21,11 +21,6 @@ public enum AppealStatus {
 
     @JsonCreator
     public static AppealStatus fromWireValue(String value) {
-        for (AppealStatus status : values()) {
-            if (status.wireValue.equalsIgnoreCase(value)) {
-                return status;
-            }
-        }
-        throw new IllegalArgumentException("Unknown appeal status: " + value);
+        return WireValues.parse(AppealStatus.class, value, AppealStatus::wireValue, "appeal status");
     }
 }

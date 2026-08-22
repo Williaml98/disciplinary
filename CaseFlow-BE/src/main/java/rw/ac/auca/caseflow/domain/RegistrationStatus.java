@@ -21,11 +21,7 @@ public enum RegistrationStatus {
 
     @JsonCreator
     public static RegistrationStatus fromWireValue(String value) {
-        for (RegistrationStatus status : values()) {
-            if (status.wireValue.equalsIgnoreCase(value)) {
-                return status;
-            }
-        }
-        throw new IllegalArgumentException("Unknown registration status: " + value);
+        return WireValues.parse(
+                RegistrationStatus.class, value, RegistrationStatus::wireValue, "registration status");
     }
 }

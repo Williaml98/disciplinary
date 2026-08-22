@@ -23,11 +23,6 @@ public enum DecisionType {
 
     @JsonCreator
     public static DecisionType fromWireValue(String value) {
-        for (DecisionType type : values()) {
-            if (type.wireValue.equalsIgnoreCase(value)) {
-                return type;
-            }
-        }
-        throw new IllegalArgumentException("Unknown decision type: " + value);
+        return WireValues.parse(DecisionType.class, value, DecisionType::wireValue, "decision type");
     }
 }

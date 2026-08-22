@@ -22,11 +22,6 @@ public enum Role {
 
     @JsonCreator
     public static Role fromWireValue(String value) {
-        for (Role role : values()) {
-            if (role.wireValue.equalsIgnoreCase(value)) {
-                return role;
-            }
-        }
-        throw new IllegalArgumentException("Unknown role: " + value);
+        return WireValues.parse(Role.class, value, Role::wireValue, "role");
     }
 }

@@ -23,11 +23,6 @@ public enum CaseStatus {
 
     @JsonCreator
     public static CaseStatus fromWireValue(String value) {
-        for (CaseStatus status : values()) {
-            if (status.wireValue.equalsIgnoreCase(value)) {
-                return status;
-            }
-        }
-        throw new IllegalArgumentException("Unknown case status: " + value);
+        return WireValues.parse(CaseStatus.class, value, CaseStatus::wireValue, "case status");
     }
 }
