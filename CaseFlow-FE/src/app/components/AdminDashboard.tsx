@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { LayoutDashboard, AlertTriangle, List, Clock, ChevronRight, Bell, UserCog, Plus, AlertCircle, BookOpen, Users, GraduationCap, Settings, Pencil, Ban, RotateCcw, Mail, X, Scale, BarChart3 } from 'lucide-react';
-import { DashboardLayout, PageHeader, StatusBadge, EvidenceGallery } from './DashboardLayout';
+import { LayoutDashboard, AlertTriangle, List, Clock, ChevronRight, Bell, UserCog, Plus, AlertCircle, BookOpen, Users, GraduationCap, Settings, Pencil, Ban, RotateCcw, Mail, X, Scale, BarChart3, ArrowLeft, Loader2 } from 'lucide-react';
+import { DashboardLayout, PageHeader, PrimaryButton, StatusBadge, EvidenceGallery } from './DashboardLayout';
 import { DisciplinaryRulesPage } from './DisciplinaryRulesPage';
 import { ReportsPage } from './ReportsPage';
 import type { AppUser, DisciplinaryCase, Role } from './mockData';
@@ -25,7 +25,29 @@ interface Props {
   onUpdateProfile: (updated: AppUser) => void;
 }
 
-const PIE_COLORS = ['#1D3A5F', '#f59e0b', '#f97316', '#a855f7', '#22c55e'];
+/*
+ * Chart colours are literal hex rather than the Tailwind token utilities: recharts writes them onto
+ * SVG presentation attributes, which don't resolve CSS custom properties. They're picked to match the
+ * StatusBadge palette so a slice and its badge read as the same thing.
+ */
+const PIE_COLORS = [
+  '#9aa0ac', // Reported     — ink-400
+  '#f59e0b', // Under Review — amber-500
+  '#3d6796', // Decided      — brand-500
+  '#8b5cf6', // Under Appeal — violet-500
+  '#10b981', // Resolved     — emerald-500
+];
+const CHART_NAVY = '#1d3a5f'; // brand-700
+const CHART_GRID = '#e0e3e9'; // ink-200
+const CHART_AXIS = '#9aa0ac'; // ink-400
+const CHART_TOOLTIP: React.CSSProperties = {
+  borderRadius: '12px',
+  border: '1px solid rgba(29, 58, 95, 0.10)',
+  boxShadow: '0 4px 8px rgba(13, 28, 46, 0.06), 0 12px 28px rgba(13, 28, 46, 0.10)',
+  fontSize: '12px',
+  fontFamily: 'var(--font-tight)',
+  padding: '8px 12px',
+};
 
 const ROLE_OPTIONS: { value: Role; label: string; icon: React.ReactNode }[] = [
   { value: 'lecturer', label: 'Lecturer / Invigilator', icon: <BookOpen size={14} /> },
@@ -40,6 +62,25 @@ const ROLE_LABELS: Record<Role, string> = {
   student: 'Student',
   admin: 'Registrar / Admin',
 };
+
+/** Surface treatment for the shared SearchInput, which brings no chrome of its own. */
+const SEARCH_SHELL = 'rounded-xl border border-[var(--hairline)] bg-white px-3.5 py-2.5';
+
+/** Quiet counterpart to PrimaryButton, for cancel / dismiss actions. */
+const SECONDARY_BUTTON =
+  `w-full rounded-xl border border-[var(--hairline)] bg-white px-4 py-2.5 text-sm font-medium text-ink-700
+   hover:bg-ink-50 hover:border-[var(--hairline-strong)] disabled:opacity-60 disabled:cursor-not-allowed
+   transition-all duration-[var(--dur)] ease-[var(--ease-out)]`;
+
+/** Filter pill used by the status, role and audit-kind toolbars. */
+function chipCls(active: boolean) {
+  return `px-3 py-1.5 rounded-full text-[12px] font-tight font-medium whitespace-nowrap border
+          transition-all duration-[var(--dur)] ease-[var(--ease-out)] ${
+    active
+      ? 'bg-brand-700 text-white border-brand-700 shadow-[var(--shadow-xs)]'
+      : 'bg-white text-ink-600 border-[var(--hairline)] hover:bg-ink-50 hover:border-[var(--hairline-strong)] hover:text-ink-900'
+  }`;
+}
 
 export function AdminDashboard({ user, onLogout, onUpdateProfile }: Props) {
   const [activeNav, setActiveNav] = useState('overview');
@@ -76,6 +117,10 @@ export function AdminDashboard({ user, onLogout, onUpdateProfile }: Props) {
     { registrationStatus: 'Restricted', suspensionEndFrom: today }, { size: 100, enabled: alertsEnabled });
   const flagged = usePagedCases(
     { registrationStatus: 'Flagged' }, { size: 100, enabled: alertsEnabled });
+  // Restricted with no end date — an expulsion. Every other bucket filters on a date range, and those
+  // all exclude NULLs, so without this the expelled were on no list at all.
+  const expelledCases = usePagedCases(
+    { registrationStatus: 'Restricted', suspensionEndMissing: true }, { size: 100, enabled: alertsEnabled });
 
   const pieData = stats.data ? [
     { name: 'Reported', value: stats.data.reported },
@@ -106,69 +151,79 @@ export function AdminDashboard({ user, onLogout, onUpdateProfile }: Props) {
         <>
           <PageHeader title="Dashboard Overview" subtitle="System-wide case statistics and activity summary" />
           <div className="flex-1 overflow-y-auto p-4 sm:p-8">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 mb-6 sm:mb-8">
-              <StatCard label="Total Cases" value={stats.data?.total ?? 0} color="primary" />
-              <StatCard label="Open Cases" value={stats.data?.open ?? 0} color="amber" sub={`${stats.data?.underReview ?? 0} under review`} />
-              <StatCard label="Active Suspensions" value={stats.data?.activeSuspensions ?? 0} color="red" sub="registration restricted" />
-              <StatCard label="Registered Users" value={userStats.data?.total ?? 0} color="green" sub={`${userStats.data?.student ?? 0} students`} />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-6 mb-6 sm:mb-8">
-              <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 p-6">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-5">Cases Reported by Month</p>
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={monthly.data ?? []} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#9ca3af' }} />
-                    <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} allowDecimals={false} />
-                    <Tooltip contentStyle={{ borderRadius: '10px', border: '1px solid #e5e7eb', fontSize: '12px' }} />
-                    <Bar dataKey="count" name="Cases Reported" fill="#1D3A5F" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+            <div className="space-y-6 sm:space-y-8 rise">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
+                <StatCard label="Total Cases" value={stats.data?.total ?? 0} color="primary" />
+                <StatCard label="Open Cases" value={stats.data?.open ?? 0} color="amber" sub={`${stats.data?.underReview ?? 0} under review`} />
+                <StatCard label="Active Suspensions" value={stats.data?.activeSuspensions ?? 0} color="red" sub="registration restricted" />
+                <StatCard label="Registered Users" value={userStats.data?.total ?? 0} color="green" sub={`${userStats.data?.student ?? 0} students`} />
               </div>
 
-              <div className="bg-white rounded-2xl border border-gray-200 p-6">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-5">Cases by Status</p>
-                <ResponsiveContainer width="100%" height={160}>
-                  <PieChart>
-                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={2} dataKey="value">
-                      {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip contentStyle={{ borderRadius: '10px', border: '1px solid #e5e7eb', fontSize: '12px' }} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="space-y-1.5 mt-2">
-                  {pieData.filter(d => d.value > 0).map((d, i) => (
-                    <div key={d.name} className="flex items-center justify-between text-xs">
-                      <span className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full inline-block" style={{ background: PIE_COLORS[i] }} />
-                        {d.name}
-                      </span>
-                      <span className="text-gray-600">{d.value}</span>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-6">
+                <div className="lg:col-span-2 card p-6">
+                  <p className="eyebrow">Volume</p>
+                  <h2 className="display-md text-ink-900 mt-1 mb-5">Cases Reported by Month</h2>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={monthly.data ?? []} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} vertical={false} />
+                      <XAxis dataKey="label" tick={{ fontSize: 11, fill: CHART_AXIS }} tickLine={false} axisLine={{ stroke: CHART_GRID }} />
+                      <YAxis tick={{ fontSize: 11, fill: CHART_AXIS }} tickLine={false} axisLine={false} allowDecimals={false} />
+                      <Tooltip cursor={{ fill: 'rgba(29, 58, 95, 0.05)' }} contentStyle={CHART_TOOLTIP} />
+                      <Bar dataKey="count" name="Cases Reported" fill={CHART_NAVY} radius={[5, 5, 0, 0]} maxBarSize={38} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="card p-6">
+                  <p className="eyebrow">Composition</p>
+                  <h2 className="display-md text-ink-900 mt-1 mb-4">Cases by Status</h2>
+                  <ResponsiveContainer width="100%" height={160}>
+                    <PieChart>
+                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={2} dataKey="value" stroke="none">
+                        {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip contentStyle={CHART_TOOLTIP} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="mt-4 pt-4 border-t border-[var(--hairline)] space-y-2">
+                    {/* Index against the original array, not the filtered one — filtering out the
+                        empty statuses shifted the colour lookup, so the legend swatches stopped
+                        matching the slices they label. */}
+                    {pieData.map((d, i) => ({ ...d, colour: PIE_COLORS[i % PIE_COLORS.length] }))
+                      .filter(d => d.value > 0)
+                      .map(d => (
+                      <div key={d.name} className="flex items-center justify-between text-[12px]">
+                        <span className="flex items-center gap-2 text-ink-600">
+                          <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: d.colour }} />
+                          {d.name}
+                        </span>
+                        <span className="font-tight font-semibold text-ink-800 tabular">{d.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="card p-6">
+                <p className="eyebrow">Latest activity</p>
+                <h2 className="display-md text-ink-900 mt-1 mb-3">Recent Cases</h2>
+                <div>
+                  {recentCases.items.map(c => (
+                    <div key={c.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3 border-b border-[var(--hairline)] last:border-0">
+                      <div className="flex items-center gap-4 min-w-0">
+                        <span className="text-[11px] font-mono tabular text-ink-400 w-24 shrink-0">{c.id}</span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-ink-900 truncate">{c.studentName}</p>
+                          <p className="text-xs text-ink-500 tabular">{c.offenseType} · {c.reportDate}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <StatusBadge status={c.status} />
+                        <StatusBadge status={c.registrationStatus} />
+                      </div>
                     </div>
                   ))}
                 </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-2xl border border-gray-200 p-6">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Recent Cases</p>
-              <div className="space-y-2">
-                {recentCases.items.map(c => (
-                  <div key={c.id} className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-0">
-                    <div className="flex items-center gap-4">
-                      <span className="text-xs font-mono text-gray-400 w-24">{c.id}</span>
-                      <div>
-                        <p className="text-sm text-gray-900">{c.studentName}</p>
-                        <p className="text-xs text-gray-400">{c.offenseType} · {c.reportDate}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <StatusBadge status={c.status} />
-                      <StatusBadge status={c.registrationStatus} />
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
           </div>
@@ -180,6 +235,11 @@ export function AdminDashboard({ user, onLogout, onUpdateProfile }: Props) {
         <>
           <PageHeader title="Registrar Alerts" subtitle="Students requiring action before semester registration opens" />
           <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-5 sm:space-y-6">
+            {expelledCases.items.length > 0 && (
+              <AlertSection title="Expelled — Registration Permanently Blocked" color="red"
+                items={expelledCases.items} total={expelledCases.totalElements}
+                message="These students have been expelled. They must never be permitted to register, and there is no end date on the restriction." />
+            )}
             {expired.items.length > 0 && (
               <AlertSection title="Suspension Ended — Awaiting Re-integration Clearance" color="red"
                 items={expired.items} total={expired.totalElements}
@@ -196,9 +256,12 @@ export function AdminDashboard({ user, onLogout, onUpdateProfile }: Props) {
                 message="These students have open cases not yet decided. Monitor before permitting registration." />
             )}
             {alertBadge === 0 && (
-              <div className="text-center py-16 text-gray-400">
-                <Bell size={40} className="mx-auto mb-3 opacity-20" />
-                <p className="text-sm">No active registrar alerts at this time.</p>
+              <div className="card">
+                <EmptyState
+                  icon={<Bell size={20} />}
+                  title="No registrar alerts"
+                  hint="Every student is clear to register. New holds appear here as soon as a case restricts one."
+                />
               </div>
             )}
           </div>
@@ -211,7 +274,13 @@ export function AdminDashboard({ user, onLogout, onUpdateProfile }: Props) {
           <PageHeader title="All Cases" subtitle={`${pagedCases.totalElements} case${pagedCases.totalElements !== 1 ? 's' : ''} found`} />
           {selectedCase ? (
             <div className="flex-1 overflow-y-auto p-4 sm:p-8">
-              <button onClick={() => setSelectedCase(null)} className="text-sm text-gray-500 hover:text-gray-900 mb-5 transition-colors">← Back to cases</button>
+              <button
+                type="button"
+                onClick={() => setSelectedCase(null)}
+                className="inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-500 hover:text-ink-900 mb-5 transition-colors duration-[var(--dur)] ease-[var(--ease-out)]"
+              >
+                <ArrowLeft size={14} /> Back to cases
+              </button>
               <AdminCaseDetail
             c={selectedCase}
             actor={user.name}
@@ -225,45 +294,54 @@ export function AdminDashboard({ user, onLogout, onUpdateProfile }: Props) {
             </div>
           ) : (
             <div className="flex-1 overflow-hidden flex flex-col">
-              <div className="bg-white border-b border-gray-200 px-4 sm:px-8 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="bg-surface border-b border-[var(--hairline)] px-4 sm:px-8 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
                 <SearchInput
                   value={searchQuery}
                   onChange={setSearchQuery}
                   placeholder="Search by student, ID, case number or offense…"
                   resultCount={searchQuery ? pagedCases.totalElements : undefined}
-                  className="flex-1"
+                  className={`flex-1 ${SEARCH_SHELL}`}
                 />
                 <div className="flex gap-1.5 flex-wrap">
                   {['All', 'Reported', 'Under Review', 'Decided', 'Under Appeal', 'Resolved'].map(s => (
-                    <button key={s} onClick={() => setStatusFilter(s)}
-                      className={`px-2.5 py-1 rounded-lg text-xs transition-colors whitespace-nowrap ${statusFilter === s ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                      style={statusFilter === s ? { backgroundColor: '#1D3A5F' } : {}}>
+                    <button key={s} type="button" onClick={() => setStatusFilter(s)}
+                      aria-pressed={statusFilter === s}
+                      className={chipCls(statusFilter === s)}>
                       {s}
                     </button>
                   ))}
                 </div>
               </div>
               <div className="flex-1 overflow-auto">
-                <table className="w-full min-w-[700px]">
-                  <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
+                <table className="w-full min-w-[880px]">
+                  <thead className="bg-ink-50/95 backdrop-blur-sm border-b border-[var(--hairline)] sticky top-0 z-10">
                     <tr>
                       {['Case ID', 'Student', 'Offense', 'Reported', 'Status', 'Decision', 'Registration', ''].map(h => (
-                        <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                        <th key={h} className="text-left px-6 py-3 eyebrow">{h}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 bg-white">
+                  <tbody className="bg-white divide-y divide-[var(--hairline)]">
                     {pagedCases.items.map(c => (
-                      <tr key={c.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4 text-xs font-mono text-gray-500">{c.id}</td>
-                        <td className="px-6 py-4"><p className="text-sm text-gray-900">{c.studentName}</p><p className="text-xs text-gray-400">ID: {c.studentId}</p></td>
-                        <td className="px-6 py-4 text-sm text-gray-600">{c.offenseType}</td>
-                        <td className="px-6 py-4 text-sm text-gray-500">{c.reportDate}</td>
+                      <tr key={c.id} className="hover:bg-brand-50/40 transition-colors duration-[var(--dur)]">
+                        <td className="px-6 py-4 text-[11px] font-mono tabular text-ink-500 whitespace-nowrap">{c.id}</td>
+                        <td className="px-6 py-4">
+                          <p className="text-sm font-medium text-ink-900">{c.studentName}</p>
+                          <p className="text-xs text-ink-400 tabular whitespace-nowrap">ID: {c.studentId}</p>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-ink-600">{c.offenseType}</td>
+                        <td className="px-6 py-4 text-sm text-ink-500 tabular" style={{ whiteSpace: "nowrap" }}>{c.reportDate}</td>
                         <td className="px-6 py-4"><StatusBadge status={c.status} /></td>
-                        <td className="px-6 py-4">{c.decision ? <StatusBadge status={c.decision} /> : <span className="text-gray-300 text-xs">—</span>}</td>
+                        <td className="px-6 py-4">{c.decision ? <StatusBadge status={c.decision} /> : <span className="text-ink-300 text-xs">—</span>}</td>
                         <td className="px-6 py-4"><StatusBadge status={c.registrationStatus} /></td>
                         <td className="px-6 py-4">
-                          <button onClick={() => setSelectedCase(c)} className="hover:opacity-70 transition-opacity" style={{ color: '#1D3A5F' }}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedCase(c)}
+                            aria-label={`Open case ${c.id}`}
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-brand-700 hover:bg-brand-50
+                                       transition-colors duration-[var(--dur)] ease-[var(--ease-out)]"
+                          >
                             <ChevronRight size={16} />
                           </button>
                         </td>
@@ -272,13 +350,17 @@ export function AdminDashboard({ user, onLogout, onUpdateProfile }: Props) {
                   </tbody>
                 </table>
                 {pagedCases.loading && pagedCases.items.length === 0 && (
-                  <div className="text-center py-12 text-gray-400 text-sm">Loading cases…</div>
+                  <LoadingNote>Loading cases…</LoadingNote>
                 )}
                 {pagedCases.error && (
-                  <div className="text-center py-12 text-red-600 text-sm">{pagedCases.error}</div>
+                  <ErrorNote message={pagedCases.error} className="mx-4 sm:mx-8 mt-4" />
                 )}
                 {!pagedCases.loading && !pagedCases.error && pagedCases.items.length === 0 && (
-                  <div className="text-center py-12 text-gray-400 text-sm">No cases match your search.</div>
+                  <EmptyState
+                    icon={<List size={20} />}
+                    title="No cases match your search"
+                    hint="Try a different name, ID or case number — or reset the status filter to All."
+                  />
                 )}
               </div>
               <Pagination
@@ -438,64 +520,67 @@ function UserManagement({ currentAdmin }: { currentAdmin: AppUser }) {
         title="User Management"
         subtitle={`${pageMeta.totalElements} account${pageMeta.totalElements !== 1 ? 's' : ''} registered`}
         action={
-          <button onClick={() => setShowCreateForm(true)}
-            className="flex items-center gap-2 text-white px-4 py-2 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity"
-            style={{ backgroundColor: '#1D3A5F' }}>
+          <PrimaryButton onClick={() => setShowCreateForm(true)}>
             <Plus size={15} /> Create Account
-          </button>
+          </PrimaryButton>
         }
       />
 
       <div className="flex-1 overflow-hidden flex flex-col">
         {/* Filters */}
-        <div className="bg-white border-b border-gray-200 px-4 sm:px-8 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="bg-surface border-b border-[var(--hairline)] px-4 sm:px-8 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
           <SearchInput
             value={searchQuery}
             onChange={setSearchQuery}
             placeholder="Search by name or email…"
             resultCount={searchQuery ? pageMeta.totalElements : undefined}
-            className="flex-1"
+            className={`flex-1 ${SEARCH_SHELL}`}
           />
           <div className="flex gap-1.5 flex-wrap">
             {(['all', 'admin', 'committee', 'lecturer', 'student'] as const).map(r => (
-              <button key={r} onClick={() => setRoleFilter(r)}
-                className={`px-2.5 py-1 rounded-lg text-xs transition-colors whitespace-nowrap ${roleFilter === r ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                style={roleFilter === r ? { backgroundColor: '#1D3A5F' } : {}}>
-                {r === 'all' ? `All (${roleCounts.all})` : r === 'committee' ? `Committee (${roleCounts.committee})` : `${ROLE_LABELS[r]} (${roleCounts[r]})`}
+              <button key={r} type="button" onClick={() => setRoleFilter(r)}
+                aria-pressed={roleFilter === r}
+                className={chipCls(roleFilter === r)}>
+                {r === 'all' ? 'All' : r === 'committee' ? 'Committee' : ROLE_LABELS[r]}
+                <span className={`ml-1.5 tabular ${roleFilter === r ? 'text-white/60' : 'text-ink-400'}`}>
+                  {roleCounts[r]}
+                </span>
               </button>
             ))}
           </div>
         </div>
 
         <div className="flex-1 overflow-auto">
-          <table className="w-full min-w-[760px]">
-            <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
+          <table className="w-full min-w-[860px]">
+            <thead className="bg-ink-50/95 backdrop-blur-sm border-b border-[var(--hairline)] sticky top-0 z-10">
               <tr>
                 {['User', 'Email', 'Role', 'Additional Info', 'Status', 'Actions'].map(h => (
-                  <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                  <th key={h} className="text-left px-6 py-3 eyebrow">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
+            <tbody className="bg-white divide-y divide-[var(--hairline)]">
               {users.map(u => (
-                <tr key={u.id} className={`hover:bg-gray-50 transition-colors ${u.active ? '' : 'opacity-60'}`}>
+                <tr key={u.id} className={`hover:bg-brand-50/40 transition-colors duration-[var(--dur)] ${u.active ? '' : 'opacity-60'}`}>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <Avatar user={u} size={32} />
                       <div>
-                        <p className="text-sm text-gray-900">{u.name}</p>
-                        {u.id === currentAdmin.id && <p className="text-xs text-gray-400">(you)</p>}
+                        <p className="text-sm font-medium text-ink-900">{u.name}</p>
+                        {u.id === currentAdmin.id && <p className="text-xs text-ink-400">(you)</p>}
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{u.email}</td>
+                  <td className="px-6 py-4 text-[13px] text-ink-500 whitespace-nowrap">{u.email}</td>
                   <td className="px-6 py-4">
                     <select
                       value={u.role}
                       disabled={busyUserId === u.id || u.id === currentAdmin.id}
                       onChange={e => changeRole(u.id, e.target.value as Role)}
                       aria-label={`Role for ${u.name}`}
-                      className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
+                      className="rounded-lg border border-[var(--hairline-strong)] bg-white px-2.5 py-1.5 text-xs text-ink-700
+                                 outline-none transition-all duration-[var(--dur)] ease-[var(--ease-out)]
+                                 disabled:bg-ink-50 disabled:text-ink-400 disabled:border-[var(--hairline)]"
                       onFocus={focusStyleSelect}
                       onBlur={blurStyleSelect}
                     >
@@ -504,40 +589,50 @@ function UserManagement({ currentAdmin }: { currentAdmin: AppUser }) {
                       ))}
                     </select>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
-                    <div className="flex flex-col gap-1">
-                      {u.studentId && <span className="bg-gray-100 px-2 py-0.5 rounded text-xs w-fit">ID: {u.studentId}</span>}
-                      {u.department && <span className="text-xs text-gray-500">{u.department}</span>}
+                  <td className="px-6 py-4">
+                    <div className="flex flex-col gap-1.5 items-start">
+                      {u.studentId && (
+                        <span className="bg-ink-100 text-ink-700 font-mono tabular px-2 py-0.5 rounded-full text-[11px]">
+                          ID: {u.studentId}
+                        </span>
+                      )}
+                      {u.department && <span className="text-xs text-ink-500">{u.department}</span>}
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     {u.active ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
+                      <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-tight font-semibold
+                                       bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-200/70">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                         Active
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-xs text-gray-600 bg-gray-100 border border-gray-200 rounded-full px-2 py-0.5">
+                      <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-tight font-semibold
+                                       bg-ink-100 text-ink-600 ring-1 ring-inset ring-ink-200">
                         <Ban size={10} /> Deactivated
                       </span>
                     )}
                   </td>
                   <td className="px-6 py-4">
                     {u.id === currentAdmin.id ? (
-                      <span className="text-xs text-gray-300">—</span>
+                      <span className="text-xs text-ink-300">—</span>
                     ) : (
                       <div className="flex items-center gap-3">
-                        <button onClick={() => setEditingUser(u)} disabled={busyUserId === u.id}
-                          className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#1D3A5F] disabled:opacity-60 transition-colors">
+                        <button type="button" onClick={() => setEditingUser(u)} disabled={busyUserId === u.id}
+                          className="flex items-center gap-1 text-[12px] font-tight font-medium text-ink-500 hover:text-brand-700
+                                     disabled:opacity-60 transition-colors duration-[var(--dur)] ease-[var(--ease-out)]">
                           <Pencil size={12} /> Edit
                         </button>
                         {/* Deactivation sits alongside delete, not in place of it: it's reversible and
                             keeps the account's name resolvable from the cases that reference it. */}
-                        <button onClick={() => toggleActive(u)} disabled={busyUserId === u.id}
-                          className="flex items-center gap-1 text-xs text-gray-500 hover:text-amber-600 disabled:opacity-60 transition-colors">
+                        <button type="button" onClick={() => toggleActive(u)} disabled={busyUserId === u.id}
+                          className="flex items-center gap-1 text-[12px] font-tight font-medium text-ink-500 hover:text-amber-600
+                                     disabled:opacity-60 transition-colors duration-[var(--dur)] ease-[var(--ease-out)]">
                           {u.active ? <><Ban size={12} /> Deactivate</> : <><RotateCcw size={12} /> Reactivate</>}
                         </button>
-                        <button onClick={() => setDeleteTarget(u)} disabled={busyUserId === u.id}
-                          className="text-xs text-red-400 hover:text-red-600 disabled:opacity-60 transition-colors">
+                        <button type="button" onClick={() => setDeleteTarget(u)} disabled={busyUserId === u.id}
+                          className="text-[12px] font-tight font-medium text-rose-500 hover:text-rose-700
+                                     disabled:opacity-60 transition-colors duration-[var(--dur)] ease-[var(--ease-out)]">
                           {busyUserId === u.id ? 'Working…' : 'Delete'}
                         </button>
                       </div>
@@ -548,16 +643,17 @@ function UserManagement({ currentAdmin }: { currentAdmin: AppUser }) {
             </tbody>
           </table>
           {loading && users.length === 0 && (
-            <div className="text-center py-12 text-gray-400 text-sm">Loading accounts…</div>
+            <LoadingNote>Loading accounts…</LoadingNote>
           )}
           {error && (
-            <div className="mx-8 mt-4 flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-              <AlertCircle size={15} className="shrink-0" />
-              <p className="text-sm">{error}</p>
-            </div>
+            <ErrorNote message={error} className="mx-4 sm:mx-8 mt-4" />
           )}
           {!loading && !error && users.length === 0 && (
-            <div className="text-center py-12 text-gray-400 text-sm">No accounts match your search.</div>
+            <EmptyState
+              icon={<Users size={20} />}
+              title="No accounts match your search"
+              hint="Try another name or email, or switch the role filter back to All."
+            />
           )}
         </div>
 
@@ -650,14 +746,25 @@ function CreateAccountModal({ onCreate, onClose }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-end">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative w-full max-w-md h-full bg-white shadow-2xl flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200" style={{ backgroundColor: '#1D3A5F' }}>
-          <h2 className="text-white font-medium">Create New Account</h2>
-          <button onClick={onClose} className="text-white/70 hover:text-white transition-colors"><X size={18} /></button>
+      <div className="absolute inset-0 bg-ink-950/40 backdrop-blur-[2px]" onClick={onClose} aria-hidden="true" />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-account-title"
+        className="relative w-full max-w-md h-full bg-surface shadow-[var(--shadow-xl)] flex flex-col overflow-hidden"
+      >
+        <div className="flex items-center justify-between px-6 py-5 bg-brand-700 shrink-0">
+          <div>
+            <p className="text-brand-300/80 text-[10px] font-tight font-semibold uppercase tracking-[0.14em]">User management</p>
+            <h2 id="create-account-title" className="display-md text-white mt-1">Create New Account</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close"
+            className="text-white/60 hover:text-white transition-colors duration-[var(--dur)] ease-[var(--ease-out)] p-1 rounded-lg hover:bg-white/10">
+            <X size={18} />
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto p-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-5">
             <ModalField label="Full Name" error={errors.name}>
               <input type="text" value={form.name} onChange={e => set('name', e.target.value)}
                 placeholder="e.g. Dr. Marie Claire Uwase" className={inputCls(!!errors.name)}
@@ -674,8 +781,12 @@ function CreateAccountModal({ onCreate, onClose }: {
               <div className="grid grid-cols-2 gap-2">
                 {ROLE_OPTIONS.map(opt => (
                   <button key={opt.value} type="button" onClick={() => { set('role', opt.value); set('studentId', ''); set('department', ''); }}
-                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs transition-all text-left ${
-                      form.role === opt.value ? 'border-[#1D3A5F] bg-[#1D3A5F]/5 text-[#1D3A5F]' : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
+                    aria-pressed={form.role === opt.value}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-[12px] font-medium text-left
+                                transition-all duration-[var(--dur)] ease-[var(--ease-out)] ${
+                      form.role === opt.value
+                        ? 'border-brand-600 bg-brand-50 text-brand-800 shadow-[var(--shadow-xs)]'
+                        : 'border-[var(--hairline)] bg-white text-ink-600 hover:border-[var(--hairline-strong)] hover:bg-ink-50'
                     }`}>
                     {opt.icon} {opt.label}
                   </button>
@@ -711,19 +822,19 @@ function CreateAccountModal({ onCreate, onClose }: {
 
             {/* No password fields: the backend generates a one-time password and emails it, then forces
                 a change at first sign-in, so an admin never handles someone else's credential. */}
-            <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5">
-              <Mail size={14} className="text-blue-600 shrink-0 mt-0.5" />
-              <p className="text-xs text-blue-800">
+            <div className="flex items-start gap-2.5 rounded-xl border border-brand-200 bg-brand-50 px-3.5 py-3">
+              <Mail size={14} className="text-brand-600 shrink-0 mt-0.5" />
+              <p className="text-[12px] text-brand-900 leading-relaxed">
                 A welcome email with a temporary password will be sent to this address. They'll be asked
                 to choose their own password the first time they sign in.
               </p>
             </div>
 
-            <div className="pt-2 space-y-2">
-              <button type="submit" disabled={creating} className="w-full text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity" style={{ backgroundColor: '#1D3A5F' }}>
+            <div className="pt-1 space-y-2">
+              <PrimaryButton type="submit" disabled={creating} className="w-full">
                 {creating ? 'Creating Account…' : 'Create Account'}
-              </button>
-              <button type="button" onClick={onClose} className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl py-2.5 text-sm transition-colors">
+              </PrimaryButton>
+              <button type="button" onClick={onClose} className={SECONDARY_BUTTON}>
                 Cancel
               </button>
             </div>
@@ -789,22 +900,33 @@ function EditAccountModal({ user, onSaved, onClose }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-end">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative w-full max-w-md h-full bg-white shadow-2xl flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200" style={{ backgroundColor: '#1D3A5F' }}>
-          <h2 className="text-white font-medium">Edit Account</h2>
-          <button onClick={onClose} className="text-white/70 hover:text-white transition-colors"><X size={18} /></button>
+      <div className="absolute inset-0 bg-ink-950/40 backdrop-blur-[2px]" onClick={onClose} aria-hidden="true" />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-account-title"
+        className="relative w-full max-w-md h-full bg-surface shadow-[var(--shadow-xl)] flex flex-col overflow-hidden"
+      >
+        <div className="flex items-center justify-between px-6 py-5 bg-brand-700 shrink-0">
+          <div>
+            <p className="text-brand-300/80 text-[10px] font-tight font-semibold uppercase tracking-[0.14em]">User management</p>
+            <h2 id="edit-account-title" className="display-md text-white mt-1">Edit Account</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close"
+            className="text-white/60 hover:text-white transition-colors duration-[var(--dur)] ease-[var(--ease-out)] p-1 rounded-lg hover:bg-white/10">
+            <X size={18} />
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="flex items-center gap-3 mb-5 pb-5 border-b border-gray-100">
+          <div className="flex items-center gap-3 mb-5 pb-5 border-b border-[var(--hairline)]">
             <Avatar user={user} size={40} />
             <div className="min-w-0">
-              <p className="text-sm text-gray-900 truncate">{user.name}</p>
-              <p className="text-xs text-gray-400">{ROLE_LABELS[user.role]}</p>
+              <p className="text-sm font-medium text-ink-900 truncate">{user.name}</p>
+              <p className="text-xs text-ink-500">{ROLE_LABELS[user.role]}</p>
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-5">
             <ModalField label="Full Name" error={errors.name}>
               <input type="text" value={form.name} onChange={e => set('name', e.target.value)}
                 className={inputCls(!!errors.name)} onFocus={focusStyle} onBlur={blurStyle} />
@@ -835,20 +957,20 @@ function EditAccountModal({ user, onSaved, onClose }: {
             </ModalField>
 
             {isStudent && (
-              <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
-                Changing a student ID re-points which case this account can see. Only change it to
-                correct a mistake.
-              </p>
+              <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3">
+                <AlertTriangle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-[12px] text-amber-900 leading-relaxed">
+                  Changing a student ID re-points which case this account can see. Only change it to
+                  correct a mistake.
+                </p>
+              </div>
             )}
 
-            <div className="pt-2 space-y-2">
-              <button type="submit" disabled={saving}
-                className="w-full text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
-                style={{ backgroundColor: '#1D3A5F' }}>
+            <div className="pt-1 space-y-2">
+              <PrimaryButton type="submit" disabled={saving} className="w-full">
                 {saving ? 'Saving…' : 'Save Changes'}
-              </button>
-              <button type="button" onClick={onClose}
-                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl py-2.5 text-sm transition-colors">
+              </PrimaryButton>
+              <button type="button" onClick={onClose} className={SECONDARY_BUTTON}>
                 Cancel
               </button>
             </div>
@@ -894,27 +1016,37 @@ function DeleteAccountDialog({ user, busy, onConfirm, onDeactivateInstead, onClo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
+      <div className="absolute inset-0 bg-ink-950/50 backdrop-blur-[2px]" onClick={onClose} aria-hidden="true" />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-account-title"
+        className="relative w-full max-w-md card shadow-[var(--shadow-xl)] overflow-hidden rise"
+      >
         <div className="p-6">
-          <div className="flex items-start gap-3 mb-4">
-            <div className="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center shrink-0">
-              <AlertTriangle size={17} className="text-red-600" />
+          <div className="flex items-start gap-3.5 mb-5">
+            <div className="w-10 h-10 rounded-full bg-rose-50 ring-1 ring-inset ring-rose-200/70 flex items-center justify-center shrink-0">
+              <AlertTriangle size={17} className="text-rose-600" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base font-semibold text-gray-900">Delete {user.name}?</h2>
-              <p className="text-sm text-gray-500 mt-0.5">This permanently removes the account. It cannot be undone.</p>
+              <h2 id="delete-account-title" className="display-md text-ink-900">Delete {user.name}?</h2>
+              <p className="text-[13px] text-ink-500 mt-1 leading-relaxed">
+                This permanently removes the account. It cannot be undone.
+              </p>
             </div>
           </div>
 
           {loadingImpact ? (
-            <p className="text-sm text-gray-400 py-3">Checking what references this account…</p>
+            <div className="flex items-center gap-2 rounded-xl border border-[var(--hairline)] bg-ink-50 px-4 py-3 mb-5 text-[13px] text-ink-500">
+              <Loader2 size={14} className="animate-spin shrink-0" />
+              Checking what references this account…
+            </div>
           ) : hasImpact && impact ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-4">
-              <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-2">
-                This account is referenced by existing records
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3.5 mb-5">
+              <p className="eyebrow text-amber-700 mb-2">
+                Referenced by existing records
               </p>
-              <ul className="text-sm text-amber-900 space-y-1">
+              <ul className="text-[13px] text-amber-900 space-y-1 tabular">
                 {impact.casesReported > 0 && (
                   <li>• {impact.casesReported} case{impact.casesReported === 1 ? '' : 's'} they reported</li>
                 )}
@@ -925,31 +1057,31 @@ function DeleteAccountDialog({ user, busy, onConfirm, onDeactivateInstead, onClo
                   <li>• {impact.notesAuthored} committee note{impact.notesAuthored === 1 ? '' : 's'} they authored</li>
                 )}
               </ul>
-              <p className="text-xs text-amber-800 mt-2">
+              <p className="text-[12px] text-amber-800 mt-2.5 leading-relaxed">
                 Those records stay, but will point at a name with no account behind it. Deactivating keeps
                 the link intact and blocks sign-in.
               </p>
             </div>
           ) : (
-            <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 mb-4">
-              <p className="text-sm text-gray-600">No cases or notes reference this account.</p>
+            <div className="rounded-xl border border-[var(--hairline)] bg-ink-50 px-4 py-3.5 mb-5">
+              <p className="text-[13px] text-ink-600">No cases or notes reference this account.</p>
             </div>
           )}
 
           <div className="space-y-2">
             {hasImpact && (
-              <button onClick={onDeactivateInstead} disabled={busy}
-                className="w-full rounded-xl py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60 transition-opacity"
-                style={{ backgroundColor: '#1D3A5F' }}>
+              <PrimaryButton onClick={onDeactivateInstead} disabled={busy} className="w-full">
                 Deactivate instead (recommended)
-              </button>
+              </PrimaryButton>
             )}
-            <button onClick={onConfirm} disabled={busy}
-              className="w-full rounded-xl py-2.5 text-sm font-medium bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white transition-colors">
+            <button type="button" onClick={onConfirm} disabled={busy}
+              className="w-full rounded-xl py-2.5 text-sm font-semibold bg-rose-600 text-white shadow-[var(--shadow-sm)]
+                         hover:bg-rose-700 hover:shadow-[var(--shadow-md)] active:translate-y-px
+                         disabled:opacity-60 disabled:cursor-not-allowed
+                         transition-all duration-[var(--dur)] ease-[var(--ease-out)]">
               {busy ? 'Deleting…' : 'Delete permanently'}
             </button>
-            <button onClick={onClose} disabled={busy}
-              className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl py-2.5 text-sm transition-colors">
+            <button type="button" onClick={onClose} disabled={busy} className={SECONDARY_BUTTON}>
               Cancel
             </button>
           </div>
@@ -960,19 +1092,25 @@ function DeleteAccountDialog({ user, busy, onConfirm, onDeactivateInstead, onClo
 }
 
 /* ── helpers ── */
+
 function StatCard({ label, value, color, sub }: { label: string; value: string | number; color: string; sub?: string }) {
-  const styles: Record<string, { bg: string; text: string }> = {
-    primary: { bg: '#1D3A5F0d', text: '#1D3A5F' },
-    amber: { bg: '#fef3c70d', text: '#b45309' },
-    red: { bg: '#fef2f20d', text: '#b91c1c' },
-    green: { bg: '#f0fdf40d', text: '#15803d' },
+  // The figure carries the tone; the card itself stays white so four of them in a row don't read as a
+  // stripe of tinted boxes.
+  const styles: Record<string, { text: string; dot: string }> = {
+    primary: { text: 'text-brand-700', dot: 'bg-brand-600' },
+    amber: { text: 'text-amber-700', dot: 'bg-amber-500' },
+    red: { text: 'text-rose-700', dot: 'bg-rose-500' },
+    green: { text: 'text-emerald-700', dot: 'bg-emerald-500' },
   };
   const s = styles[color] || styles.primary;
   return (
-    <div className="rounded-2xl border border-gray-200 p-5" style={{ backgroundColor: s.bg }}>
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{label}</p>
-      <p className="text-3xl" style={{ color: s.text }}>{value}</p>
-      {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+    <div className="card card-interactive p-5">
+      <div className="flex items-center gap-2 mb-2.5">
+        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.dot}`} aria-hidden="true" />
+        <p className="eyebrow truncate">{label}</p>
+      </div>
+      <p className={`display-xl tabular ${s.text}`}>{value}</p>
+      {sub && <p className="text-xs text-ink-500 mt-1.5 tabular">{sub}</p>}
     </div>
   );
 }
@@ -980,41 +1118,65 @@ function StatCard({ label, value, color, sub }: { label: string; value: string |
 function AlertSection({ title, color, items, total, message }: {
   title: string; color: string; items: DisciplinaryCase[]; total: number; message: string;
 }) {
-  const styles: Record<string, { wrap: string; text: string }> = {
-    red: { wrap: 'border-red-200 bg-red-50', text: 'text-red-800' },
-    orange: { wrap: 'border-orange-200 bg-orange-50', text: 'text-orange-800' },
-    amber: { wrap: 'border-amber-200 bg-amber-50', text: 'text-amber-800' },
+  // A coloured rail down the edge plus a tinted header, rather than a flat wash of colour across the
+  // whole panel: the severity stays legible while the student rows underneath stay readable.
+  const styles: Record<string, { rail: string; tint: string; icon: string; title: string; body: string; count: string }> = {
+    red: {
+      rail: 'bg-rose-500', tint: 'bg-rose-50/80', icon: 'text-rose-600',
+      title: 'text-rose-900', body: 'text-rose-800/90', count: 'bg-rose-100 text-rose-800',
+    },
+    orange: {
+      rail: 'bg-orange-500', tint: 'bg-orange-50/80', icon: 'text-orange-600',
+      title: 'text-orange-900', body: 'text-orange-800/90', count: 'bg-orange-100 text-orange-800',
+    },
+    amber: {
+      rail: 'bg-amber-500', tint: 'bg-amber-50/80', icon: 'text-amber-600',
+      title: 'text-amber-900', body: 'text-amber-800/90', count: 'bg-amber-100 text-amber-800',
+    },
   };
   const s = styles[color];
   return (
-    <div className={`rounded-2xl border ${s.wrap} p-6`}>
-      <div className="flex items-center gap-2 mb-3">
-        <AlertTriangle size={16} className={s.text} />
-        <p className={`text-sm font-semibold ${s.text}`}>{title} ({total})</p>
+    <section className="card relative overflow-hidden">
+      <span className={`absolute inset-y-0 left-0 w-1.5 ${s.rail}`} aria-hidden="true" />
+      <div className={`${s.tint} border-b border-[var(--hairline)] pl-7 pr-6 py-5`}>
+        <div className="flex items-start gap-2.5">
+          <AlertTriangle size={16} className={`${s.icon} shrink-0 mt-1`} />
+          <div className="min-w-0">
+            <h2 className={`display-md ${s.title}`}>
+              {title}
+              <span className={`ml-2.5 align-middle inline-flex items-center rounded-full px-2 py-0.5
+                                text-[11px] font-tight font-semibold tabular ${s.count}`}>
+                {total}
+              </span>
+            </h2>
+            <p className={`text-[13px] mt-1.5 leading-relaxed ${s.body}`}>{message}</p>
+          </div>
+        </div>
       </div>
-      <p className={`text-xs mb-4 ${s.text} opacity-80`}>{message}</p>
-      <div className="space-y-2">
+      <div className="divide-y divide-[var(--hairline)]">
         {items.map(c => (
-          <div key={c.id} className="bg-white rounded-xl border border-gray-100 px-4 py-3 flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-mono text-gray-400">{c.id}</span>
-                <span className="text-sm text-gray-900">{c.studentName}</span>
-                <span className="text-xs text-gray-400">({c.studentId})</span>
+          <div key={c.id}
+            className="pl-7 pr-6 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5
+                       hover:bg-ink-50/60 transition-colors duration-[var(--dur)]">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-mono tabular text-ink-400">{c.id}</span>
+                <span className="text-sm font-medium text-ink-900">{c.studentName}</span>
+                <span className="text-xs text-ink-400 tabular">({c.studentId})</span>
               </div>
-              <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+              <div className="flex items-center gap-3 mt-1 text-xs text-ink-500 tabular flex-wrap">
                 <span>{c.offenseType}</span>
                 {c.suspensionStart && <span>Suspension: {c.suspensionStart} → {c.suspensionEnd}</span>}
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <StatusBadge status={c.status} />
               <StatusBadge status={c.registrationStatus} />
             </div>
           </div>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -1024,56 +1186,85 @@ function AdminCaseDetail({ c, actor, onStatusChanged }: {
   onStatusChanged: (updated: DisciplinaryCase) => void;
 }) {
   return (
-    <div className="max-w-3xl mx-auto space-y-5">
-      <div className="bg-white rounded-2xl border border-gray-200 p-6">
-        <div className="flex items-start justify-between mb-5">
-          <div>
-            <p className="text-xs font-mono text-gray-400 mb-1">{c.id}</p>
-            <h2 className="text-lg text-gray-900">{c.studentName}</h2>
-            <p className="text-sm text-gray-500">Student ID: {c.studentId} · {c.reporterDepartment}</p>
+    <div className="max-w-3xl mx-auto space-y-5 rise">
+      <div className="card p-6">
+        <div className="flex items-start justify-between gap-4 mb-5">
+          <div className="min-w-0">
+            <p className="text-[11px] font-mono tabular text-ink-400 mb-1.5">{c.id}</p>
+            <h2 className="display-lg text-ink-900 truncate">{c.studentName}</h2>
+            <p className="text-[13px] text-ink-500 mt-0.5 tabular">Student ID: {c.studentId} · {c.reporterDepartment}</p>
           </div>
-          <div className="flex flex-col gap-2 items-end">
+          <div className="flex flex-col gap-2 items-end shrink-0">
             <StatusBadge status={c.status} />
             <StatusBadge status={c.registrationStatus} />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3 text-sm border-t border-gray-100 pt-4">
-          <div><span className="text-gray-500">Offense:</span> <span className="ml-1 text-gray-900">{c.offenseType}</span></div>
-          <div><span className="text-gray-500">Reported:</span> <span className="ml-1 text-gray-900">{c.reportDate}</span></div>
-          <div><span className="text-gray-500">Reported By:</span> <span className="ml-1 text-gray-900">{c.reportedBy}</span></div>
-          {c.decision && <div><span className="text-gray-500">Decision:</span> <span className="ml-1"><StatusBadge status={c.decision} /></span></div>}
-          {c.decisionDate && <div><span className="text-gray-500">Decision Date:</span> <span className="ml-1 text-gray-900">{c.decisionDate}</span></div>}
-          {c.suspensionStart && <div><span className="text-gray-500">Suspension:</span> <span className="ml-1 text-gray-900">{c.suspensionStart} → {c.suspensionEnd}</span></div>}
+        <div className="grid grid-cols-2 gap-x-4 gap-y-4 border-t border-[var(--hairline)] pt-5">
+          <div>
+            <p className="eyebrow mb-1">Offense</p>
+            <p className="text-sm text-ink-900">{c.offenseType}</p>
+          </div>
+          <div>
+            <p className="eyebrow mb-1">Reported</p>
+            <p className="text-sm text-ink-900 tabular">{c.reportDate}</p>
+          </div>
+          <div>
+            <p className="eyebrow mb-1">Reported By</p>
+            <p className="text-sm text-ink-900">{c.reportedBy}</p>
+          </div>
+          {c.decision && (
+            <div>
+              <p className="eyebrow mb-1.5">Decision</p>
+              <StatusBadge status={c.decision} />
+            </div>
+          )}
+          {c.decisionDate && (
+            <div>
+              <p className="eyebrow mb-1">Decision Date</p>
+              <p className="text-sm text-ink-900 tabular">{c.decisionDate}</p>
+            </div>
+          )}
+          {c.suspensionStart && (
+            <div>
+              <p className="eyebrow mb-1">Suspension</p>
+              <p className="text-sm text-ink-900 tabular">{c.suspensionStart} → {c.suspensionEnd}</p>
+            </div>
+          )}
         </div>
       </div>
-      <div className="bg-white rounded-2xl border border-gray-200 p-6">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Description</p>
-        <p className="text-sm text-gray-700 leading-relaxed">{c.description}</p>
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-4 mb-2">Evidence</p>
-        <p className="text-sm text-gray-700">{c.evidence}</p>
+
+      <div className="card p-6">
+        <p className="eyebrow mb-2">Description</p>
+        <p className="text-sm text-ink-700 leading-relaxed">{c.description}</p>
+        <p className="eyebrow mt-5 mb-2">Evidence</p>
+        <p className="text-sm text-ink-700 leading-relaxed">{c.evidence}</p>
         <EvidenceGallery files={c.evidenceFiles} />
       </div>
+
       {c.appealSubmitted && (
-        <div className="bg-purple-50 border border-purple-200 rounded-2xl p-6">
-          <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-2">Student Appeal</p>
-          <p className="text-sm text-purple-900 leading-relaxed">{c.appealText}</p>
-          {c.appealStatus && <div className="mt-2"><StatusBadge status={c.appealStatus} /></div>}
+        <div className="card relative overflow-hidden p-6 pl-7">
+          <span className="absolute inset-y-0 left-0 w-1.5 bg-violet-400" aria-hidden="true" />
+          <p className="eyebrow text-violet-700 mb-2">Student Appeal</p>
+          <p className="text-sm text-ink-800 leading-relaxed">{c.appealText}</p>
+          {c.appealStatus && <div className="mt-3"><StatusBadge status={c.appealStatus} /></div>}
         </div>
       )}
+
       <StatusChanger c={c} actor={actor} onChanged={onStatusChanged} />
 
-      <div className="bg-white rounded-2xl border border-gray-200 p-6">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Full Audit Trail</p>
-        <div className="space-y-3">
+      <div className="card p-6">
+        <p className="eyebrow">History</p>
+        <h3 className="display-md text-ink-900 mt-1 mb-4">Full Audit Trail</h3>
+        <div>
           {c.auditTrail.map((entry, i) => (
             <div key={i} className="flex gap-3">
               <div className="flex flex-col items-center">
-                <div className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: '#1D3A5F' }} />
-                {i < c.auditTrail.length - 1 && <div className="w-px flex-1 bg-gray-200 mt-1" />}
+                <div className="w-2 h-2 rounded-full mt-1.5 shrink-0 bg-brand-600" />
+                {i < c.auditTrail.length - 1 && <div className="w-px flex-1 bg-[var(--hairline-strong)] mt-1" />}
               </div>
-              <div className="pb-3">
-                <p className="text-sm text-gray-800">{entry.action}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{entry.by} · {entry.timestamp}</p>
+              <div className="pb-4">
+                <p className="text-sm text-ink-800">{entry.action}</p>
+                <p className="text-xs text-ink-400 mt-0.5 tabular">{entry.by} · {entry.timestamp}</p>
               </div>
             </div>
           ))}
@@ -1086,20 +1277,60 @@ function AdminCaseDetail({ c, actor, onStatusChanged }: {
 function ModalField({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-sm text-gray-700 mb-1.5">{label}</label>
+      <label className="block text-[13px] font-medium text-ink-700 mb-1.5">{label}</label>
       {children}
-      {error && <p className="text-xs text-red-600 mt-1 flex items-center gap-1"><AlertCircle size={11} className="shrink-0" /> {error}</p>}
+      {error && (
+        <p className="text-xs text-rose-600 mt-1.5 flex items-center gap-1">
+          <AlertCircle size={11} className="shrink-0" /> {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Considered empty state: a muted mark, one bold line, one line of guidance. */
+function EmptyState({ icon, title, hint }: { icon: React.ReactNode; title: string; hint?: string }) {
+  return (
+    <div className="py-16 px-6 text-center">
+      <div className="w-12 h-12 rounded-full bg-ink-100 text-ink-400 flex items-center justify-center mx-auto mb-3.5">
+        {icon}
+      </div>
+      <p className="text-sm font-semibold text-ink-800">{title}</p>
+      {hint && <p className="text-[13px] text-ink-500 mt-1 max-w-sm mx-auto leading-relaxed">{hint}</p>}
+    </div>
+  );
+}
+
+function LoadingNote({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-center gap-2 py-14 text-[13px] text-ink-400">
+      <Loader2 size={15} className="animate-spin shrink-0" />
+      {children}
+    </div>
+  );
+}
+
+function ErrorNote({ message, className = '' }: { message: string; className?: string }) {
+  return (
+    <div className={`flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-rose-800 ${className}`}>
+      <AlertCircle size={15} className="shrink-0 mt-0.5" />
+      <p className="text-[13px]">{message}</p>
     </div>
   );
 }
 
 function inputCls(hasError: boolean) {
-  return `w-full border ${hasError ? 'border-red-400 bg-red-50' : 'border-gray-300'} rounded-xl px-4 py-2.5 text-sm focus:outline-none transition-colors`;
+  return `w-full rounded-xl border px-3.5 py-2.5 text-[13px] text-ink-800 placeholder-ink-400 outline-none
+          transition-all duration-[var(--dur)] ease-[var(--ease-out)] ${
+    hasError ? 'border-rose-300 bg-rose-50/50' : 'border-[var(--hairline-strong)] bg-white'
+  }`;
 }
 
+// Focus is applied imperatively rather than with a `focus:` utility because the shared DepartmentSelect
+// takes onFocus/onBlur handlers; both paths now resolve the same tokens as everything else.
 function focusStyle(e: React.FocusEvent<HTMLInputElement>) {
-  e.currentTarget.style.boxShadow = '0 0 0 2px #1D3A5F40';
-  e.currentTarget.style.borderColor = '#1D3A5F';
+  e.currentTarget.style.boxShadow = 'var(--shadow-focus)';
+  e.currentTarget.style.borderColor = 'var(--brand-400)';
 }
 
 function blurStyle(e: React.FocusEvent<HTMLInputElement>) {
@@ -1108,8 +1339,8 @@ function blurStyle(e: React.FocusEvent<HTMLInputElement>) {
 }
 
 function focusStyleSelect(e: React.FocusEvent<HTMLSelectElement>) {
-  e.currentTarget.style.boxShadow = '0 0 0 2px #1D3A5F40';
-  e.currentTarget.style.borderColor = '#1D3A5F';
+  e.currentTarget.style.boxShadow = 'var(--shadow-focus)';
+  e.currentTarget.style.borderColor = 'var(--brand-400)';
 }
 
 function blurStyleSelect(e: React.FocusEvent<HTMLSelectElement>) {
@@ -1180,68 +1411,73 @@ function AuditLog() {
         subtitle="Timestamped record of every case action and account change"
       />
       <div className="flex-1 overflow-y-auto p-4 sm:p-8">
-        <div className="max-w-3xl mx-auto">
-          <div className="mb-4">
+        <div className="max-w-3xl mx-auto rise">
+          <div className="mb-3">
             <SearchInput
               value={search}
               onChange={setSearch}
               placeholder="Search the audit log by action, user, or case reference…"
               resultCount={search ? totalElements : undefined}
-              className="bg-white border border-gray-200 rounded-xl px-3 py-2.5"
+              className={SEARCH_SHELL}
             />
           </div>
 
-          <div className="flex gap-1.5 mb-4">
+          <div className="flex gap-1.5 mb-5 flex-wrap">
             {filters.map(f => (
               <button
                 key={f.id}
+                type="button"
                 onClick={() => { setKind(f.id); setPage(0); }}
-                className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${
-                  kind === f.id ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-                style={kind === f.id ? { backgroundColor: '#1D3A5F' } : {}}
+                aria-pressed={kind === f.id}
+                className={chipCls(kind === f.id)}
               >
                 {f.label}
               </button>
             ))}
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+          <div className="card overflow-hidden">
             {loading && feed.length === 0 ? (
-              <p className="px-6 py-12 text-center text-sm text-gray-400">Loading audit log…</p>
+              <LoadingNote>Loading audit log…</LoadingNote>
             ) : error ? (
-              <p className="px-6 py-12 text-center text-sm text-red-600">{error}</p>
+              <div className="p-6"><ErrorNote message={error} /></div>
             ) : feed.length === 0 ? (
-              <p className="px-6 py-12 text-center text-sm text-gray-400">
-                {search ? `No audit entries match "${search}".` : 'Nothing recorded yet.'}
-              </p>
+              <EmptyState
+                icon={<Clock size={20} />}
+                title={search ? 'No matching entries' : 'Nothing recorded yet'}
+                hint={search
+                  ? `Nothing in the audit log matches "${search}".`
+                  : 'Every case action and account change will be listed here as it happens.'}
+              />
             ) : (
-              <div className="divide-y divide-gray-100">
+              <div className="divide-y divide-[var(--hairline)]">
                 {feed.map(entry => (
-                  <div key={`${entry.kind}-${entry.id}`} className="flex items-start gap-4 px-6 py-4 hover:bg-gray-50">
-                    <div
-                      className="w-2 h-2 rounded-full mt-2 shrink-0"
-                      style={{ backgroundColor: entry.kind === 'USER' ? '#a855f7' : '#1D3A5F' }}
+                  <div key={`${entry.kind}-${entry.id}`}
+                    className="flex items-start gap-4 px-6 py-4 hover:bg-brand-50/40 transition-colors duration-[var(--dur)]">
+                    <span
+                      className={`w-2 h-2 rounded-full mt-2 shrink-0 ${entry.kind === 'USER' ? 'bg-violet-500' : 'bg-brand-600'}`}
+                      aria-hidden="true"
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         {/* Same row shape for both kinds — only the reference chip differs. */}
                         {entry.kind === 'CASE' ? (
-                          <span className="text-xs font-mono px-2 py-0.5 rounded"
-                            style={{ backgroundColor: '#1D3A5F14', color: '#1D3A5F' }}>
+                          <span className="text-[11px] font-mono tabular px-2 py-0.5 rounded-full
+                                           bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-100">
                             {entry.caseId}
                           </span>
                         ) : (
-                          <span className="text-xs px-2 py-0.5 rounded bg-purple-50 text-purple-700">
+                          <span className="text-[11px] font-tight font-medium px-2 py-0.5 rounded-full
+                                           bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200/70">
                             {entry.targetUserName ?? 'Account'}
                           </span>
                         )}
-                        <span className="text-sm text-gray-800">{entry.action}</span>
+                        <span className="text-sm text-ink-800">{entry.action}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs text-gray-400">{entry.by}</span>
-                        <span className="text-gray-300">·</span>
-                        <span className="text-xs text-gray-400">{entry.timestamp}</span>
+                        <span className="text-xs text-ink-400">{entry.by}</span>
+                        <span className="text-ink-300">·</span>
+                        <span className="text-xs text-ink-400 tabular">{entry.timestamp}</span>
                       </div>
                     </div>
                   </div>

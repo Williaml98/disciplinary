@@ -7,11 +7,21 @@ import {
 } from '../../lib/api';
 import logo from '../../imports/logo.png';
 import { DepartmentSelect } from './DepartmentSelect';
+import { PrimaryButton } from './DashboardLayout';
 
-const NAVY = '#1D3A5F';
-const ACCENT = '#9CC7EE';
+const LABEL_CLS = 'eyebrow block mb-2';
 
-const LABEL_CLS = 'block text-xs font-semibold tracking-wider text-gray-500 uppercase mb-2';
+/** One control treatment for every text input and select on this screen. */
+const INPUT_BASE = 'w-full rounded-xl border px-3.5 py-2.5 text-[13px] text-ink-800 placeholder-ink-400 '
+  + 'outline-none transition-all duration-[var(--dur)] ease-[var(--ease-out)]';
+const INPUT_CLS = `${INPUT_BASE} border-[var(--hairline)] bg-white`;
+
+const ALERT_CLS = 'flex items-center gap-2.5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-rose-700';
+const QUIET_BTN_CLS = 'w-full flex items-center justify-center gap-1.5 text-sm text-ink-500 '
+  + 'hover:text-ink-900 transition-colors duration-[var(--dur)] ease-[var(--ease-out)]';
+const LINK_BTN_CLS = 'font-medium text-brand-700 hover:text-brand-800 transition-colors duration-[var(--dur)] ease-[var(--ease-out)]';
+const REVEAL_BTN_CLS = 'absolute right-3 top-1/2 -translate-y-1/2 text-ink-400 hover:text-ink-700 '
+  + 'transition-colors duration-[var(--dur)] ease-[var(--ease-out)]';
 
 interface LoginPageProps {
   onLogin: (user: AppUser) => void;
@@ -31,10 +41,10 @@ export function LoginPage({ onLogin, onRegister }: LoginPageProps) {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4 sm:p-8"
-      style={{ background: 'linear-gradient(135deg, #f7f3ea 0%, #f0ead9 50%, #e9e0c9 100%)' }}>
-      <div className="w-full max-w-5xl bg-white rounded-3xl shadow-2xl overflow-hidden grid lg:grid-cols-2">
+      style={{ background: 'linear-gradient(135deg, var(--sand-100) 0%, var(--sand-300) 50%, var(--sand-400) 100%)' }}>
+      <div className="rise w-full max-w-5xl bg-surface rounded-3xl border border-[var(--hairline)] shadow-[var(--shadow-xl)] overflow-hidden grid lg:grid-cols-2">
         {/* Left branding panel */}
-        <div className="hidden lg:flex flex-col justify-between p-10 text-white relative overflow-hidden" style={{ backgroundColor: NAVY }}>
+        <div className="hidden lg:flex flex-col justify-between p-10 text-white relative overflow-hidden bg-brand-700">
           <div className="absolute inset-0 opacity-[0.07] pointer-events-none" style={{
             backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)',
             backgroundSize: '28px 28px',
@@ -44,19 +54,19 @@ export function LoginPage({ onLogin, onRegister }: LoginPageProps) {
 
           <div className="relative">
             <div className="flex items-center gap-3 mb-14">
-              <img src={logo} alt="AUCA Logo" className="w-12 h-12 rounded-full bg-white p-0.5 object-cover" />
+              <img src={logo} alt="AUCA Logo" className="w-12 h-12 rounded-full bg-white p-0.5 object-cover ring-1 ring-white/20" />
               <div>
-                <p className="font-bold text-lg leading-tight">CaseFlow</p>
-                <p className="text-white/50 text-xs">AUCA</p>
+                <p className="display-md text-white leading-none">CaseFlow</p>
+                <p className="text-brand-300/70 text-[10px] font-tight font-semibold uppercase tracking-[0.14em] mt-1.5">AUCA</p>
               </div>
             </div>
 
             <div className="flex items-center gap-2 mb-5">
-              <span className="w-4 h-px" style={{ backgroundColor: ACCENT }} />
-              <p className="text-xs font-semibold tracking-widest uppercase" style={{ color: ACCENT }}>Student Disciplinary Platform</p>
+              <span className="w-4 h-px bg-brand-300" />
+              <p className="eyebrow text-brand-300">Student Disciplinary Platform</p>
             </div>
 
-            <h2 className="font-serif text-4xl leading-tight mb-5 text-white">
+            <h2 className="display-xl text-white mb-5">
               Manage every case. Protect every outcome.
             </h2>
             <p className="text-white/60 text-sm leading-relaxed">
@@ -73,21 +83,21 @@ export function LoginPage({ onLogin, onRegister }: LoginPageProps) {
               'Verifiable re-integration records',
             ].map((f, i) => (
               <div key={i} className="flex items-center gap-3">
-                <span className="w-5 h-5 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: `${ACCENT}26`, border: `1px solid ${ACCENT}66` }}>
-                  <Check size={11} style={{ color: ACCENT }} />
+                <span className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 bg-brand-300/15 ring-1 ring-inset ring-brand-300/40">
+                  <Check size={11} className="text-brand-300" />
                 </span>
                 <span className="text-white/60 text-sm">{f}</span>
               </div>
             ))}
-            <p className="text-white/30 text-xs pt-4">© 2026 CaseFlow · Adventist University of Central Africa, Rwanda</p>
+            <p className="text-white/30 text-xs pt-4 tabular">© 2026 CaseFlow · Adventist University of Central Africa, Rwanda</p>
           </div>
         </div>
 
         {/* Right form panel */}
-        <div className="flex flex-col overflow-y-auto bg-white">
-          <div className="lg:hidden flex items-center gap-3 p-6 pb-0" style={{ color: NAVY }}>
-            <img src={logo} alt="AUCA Logo" className="w-9 h-9 rounded-full bg-white border border-gray-200 object-cover" />
-            <span className="font-bold text-base">CaseFlow</span>
+        <div className="flex flex-col overflow-y-auto bg-surface">
+          <div className="lg:hidden flex items-center gap-3 p-6 pb-0 text-brand-700">
+            <img src={logo} alt="AUCA Logo" className="w-9 h-9 rounded-full bg-white border border-[var(--hairline)] object-cover" />
+            <span className="display-md">CaseFlow</span>
           </div>
           <div className="flex-1 flex items-start sm:items-center justify-center p-6 sm:p-10 py-8">
             <div className="w-full max-w-md">
@@ -139,66 +149,66 @@ function LoginForm({ onLogin, onSwitchToRegister, onForgotPassword }: {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="font-serif text-3xl text-gray-900 mb-1.5" style={{ color: NAVY }}>Welcome back</h1>
-        <p className="text-sm text-gray-500">Sign in to your CaseFlow account</p>
+        <p className="eyebrow mb-2">Sign in</p>
+        <h1 className="display-xl text-brand-700 mb-1.5">Welcome back</h1>
+        <p className="text-sm text-ink-500">Sign in to your CaseFlow account</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4 mb-6">
+      <form onSubmit={handleSubmit} className="space-y-5 mb-6">
         <div>
           <label className={LABEL_CLS}>Email address</label>
           <div className="relative">
-            <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
             <input type="email" required value={email}
               onChange={e => { setEmail(e.target.value); setError(''); }}
               placeholder="you@auca.ac.rw"
-              className="w-full border border-gray-300 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none"
+              className={`${INPUT_CLS} pl-10`}
               onFocus={focusStyle} onBlur={blurStyle} />
           </div>
         </div>
         <div>
           <label className={LABEL_CLS}>Password</label>
           <div className="relative">
-            <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
             <input type={showPassword ? 'text' : 'password'} required value={password}
               onChange={e => { setPassword(e.target.value); setError(''); }}
               placeholder="Enter your password"
-              className="w-full border border-gray-300 rounded-xl pl-10 pr-11 py-2.5 text-sm focus:outline-none"
+              className={`${INPUT_CLS} pl-10 pr-11`}
               onFocus={focusStyle} onBlur={blurStyle} />
             <button type="button" onClick={() => setShowPassword(s => !s)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              className={REVEAL_BTN_CLS}>
               {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
         </div>
 
         <div className="flex items-center justify-between">
-          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none w-fit">
+          <label className="flex items-center gap-2 text-sm text-ink-600 cursor-pointer select-none w-fit">
             <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300 accent-[#1D3A5F]" />
+              className="w-4 h-4 rounded border-ink-300 accent-brand-700" />
             Remember me
           </label>
-          <button type="button" onClick={onForgotPassword}
-            className="text-sm font-medium hover:opacity-80 transition-opacity" style={{ color: NAVY }}>
+          <button type="button" onClick={onForgotPassword} className={`text-sm ${LINK_BTN_CLS}`}>
             Forgot password?
           </button>
         </div>
 
         {error && (
-          <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          <div role="alert" className={ALERT_CLS}>
             <AlertCircle size={15} className="shrink-0" />
             <p className="text-sm">{error}</p>
           </div>
         )}
 
-        <button type="submit" disabled={busy} className="w-full text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
-          style={{ backgroundColor: NAVY }}>
+        <PrimaryButton type="submit" disabled={busy} className="w-full">
           {busy ? 'Signing in…' : 'Sign in'}
-        </button>
+        </PrimaryButton>
       </form>
 
-      <p className="text-center text-sm text-gray-500 mb-8">
+      <p className="text-center text-sm text-ink-500 mb-8">
         Are you a student?{' '}
-        <button onClick={onSwitchToRegister} className="font-medium hover:opacity-80 transition-opacity" style={{ color: NAVY }}>
+        <button type="button" onClick={onSwitchToRegister} className={LINK_BTN_CLS}>
           Create a student account
         </button>
       </p>
@@ -330,11 +340,11 @@ function RegisterForm({ onRegister, onSwitchToLogin }: {
   if (success) {
     return (
       <div className="text-center py-16">
-        <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#1D3A5F' }}>
+        <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5 bg-brand-700 shadow-[var(--shadow-md)]">
           <CheckCircle size={30} className="text-white" />
         </div>
-        <h2 className="text-xl text-gray-900 mb-2">Account created!</h2>
-        <p className="text-sm text-gray-500">Signing you in now…</p>
+        <h2 className="display-lg text-ink-900 mb-1.5">Account created</h2>
+        <p className="text-sm text-ink-500">Signing you in now…</p>
       </div>
     );
   }
@@ -345,23 +355,25 @@ function RegisterForm({ onRegister, onSwitchToLogin }: {
     <div>
       {/* Header */}
       <div className="mb-6">
-        <h1 className="font-serif text-3xl mb-1.5" style={{ color: NAVY }}>Create Student Account</h1>
-        <p className="text-sm text-gray-500">Students only · Staff accounts are issued by the Registrar</p>
+        <p className="eyebrow mb-2">Registration</p>
+        <h1 className="display-xl text-brand-700 mb-1.5">Create Student Account</h1>
+        <p className="text-sm text-ink-500">Students only · Staff accounts are issued by the Registrar</p>
       </div>
 
       {/* Step progress */}
       <div className="flex items-center gap-2 mb-8">
         {(['details', 'otp', 'password'] as RegStep[]).map((s, i) => (
           <div key={s} className="flex items-center gap-2 flex-1">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-all ${
-              i < stepIndex ? 'text-white' : i === stepIndex ? 'text-white' : 'bg-gray-200 text-gray-400'
-            }`} style={i <= stepIndex ? { backgroundColor: '#1D3A5F' } : {}}>
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-tight font-bold shrink-0 tabular
+                             transition-all duration-[var(--dur)] ease-[var(--ease-out)] ${
+              i <= stepIndex ? 'bg-brand-700 text-white shadow-[var(--shadow-xs)]' : 'bg-ink-100 text-ink-400'
+            }`}>
               {i < stepIndex ? <CheckCircle size={14} /> : i + 1}
             </div>
-            <span className={`text-xs hidden sm:block whitespace-nowrap ${i === stepIndex ? 'text-gray-700' : 'text-gray-400'}`}>
+            <span className={`text-xs font-tight hidden sm:block whitespace-nowrap ${i === stepIndex ? 'text-ink-700 font-semibold' : 'text-ink-400'}`}>
               {s === 'details' ? 'Your Details' : s === 'otp' ? 'Verify Email' : 'Set Password'}
             </span>
-            {i < 2 && <div className={`flex-1 h-px ml-1 ${i < stepIndex ? 'bg-[#1D3A5F]' : 'bg-gray-200'}`} />}
+            {i < 2 && <div className={`flex-1 h-px ml-1 ${i < stepIndex ? 'bg-brand-700' : 'bg-ink-200'}`} />}
           </div>
         ))}
       </div>
@@ -369,9 +381,9 @@ function RegisterForm({ onRegister, onSwitchToLogin }: {
       {/* ── STEP 1: Details ── */}
       {step === 'details' && (
         <form onSubmit={handleSendOtp} className="space-y-4">
-          <div className="flex items-center gap-2 bg-[#1D3A5F]/5 border border-[#1D3A5F]/20 rounded-xl px-4 py-2.5 mb-2">
-            <GraduationCap size={15} className="text-[#1D3A5F] shrink-0" />
-            <span className="text-sm text-[#1D3A5F]">Registering as: <strong>Student</strong></span>
+          <div className="flex items-center gap-2.5 bg-brand-50 border border-brand-200 rounded-xl px-4 py-2.5 mb-2">
+            <GraduationCap size={15} className="text-brand-700 shrink-0" />
+            <span className="text-sm text-brand-800">Registering as: <strong className="font-semibold">Student</strong></span>
           </div>
 
           <RegField label="Full Name" error={detailErrors.name}>
@@ -385,7 +397,7 @@ function RegisterForm({ onRegister, onSwitchToLogin }: {
             <input type="text" value={details.studentId}
               onChange={e => { setDetails(d => ({ ...d, studentId: e.target.value })); setDetailErrors(p => ({ ...p, studentId: '' })); }}
               placeholder="e.g. 21045"
-              className={inputCls(!!detailErrors.studentId)} onFocus={focusStyle} onBlur={blurStyle} />
+              className={`${inputCls(!!detailErrors.studentId)} tabular`} onFocus={focusStyle} onBlur={blurStyle} />
           </RegField>
 
           <RegField label="Department" error={detailErrors.department}>
@@ -408,20 +420,19 @@ function RegisterForm({ onRegister, onSwitchToLogin }: {
           </RegField>
 
           {sendError && (
-            <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+            <div role="alert" className={ALERT_CLS}>
               <AlertCircle size={15} className="shrink-0" />
               <p className="text-sm">{sendError}</p>
             </div>
           )}
 
-          <button type="submit" disabled={sendingOtp} className="w-full flex items-center justify-center gap-2 text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity mt-2"
-            style={{ backgroundColor: '#1D3A5F' }}>
+          <PrimaryButton type="submit" disabled={sendingOtp} className="w-full mt-2">
             <Mail size={15} /> {sendingOtp ? 'Sending…' : 'Send Verification Code'}
-          </button>
+          </PrimaryButton>
 
-          <p className="text-center text-sm text-gray-500 pt-1">
+          <p className="text-center text-sm text-ink-500 pt-1">
             Already have an account?{' '}
-            <button type="button" onClick={onSwitchToLogin} className="font-medium hover:opacity-80 transition-opacity" style={{ color: '#1D3A5F' }}>
+            <button type="button" onClick={onSwitchToLogin} className={LINK_BTN_CLS}>
               Sign in
             </button>
           </p>
@@ -432,44 +443,41 @@ function RegisterForm({ onRegister, onSwitchToLogin }: {
       {step === 'otp' && (
         <form onSubmit={handleVerifyOtp} className="space-y-5">
           <div className="text-center mb-2">
-            <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#1D3A5F' }}>
+            <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 bg-brand-700 shadow-[var(--shadow-md)]">
               <Mail size={24} className="text-white" />
             </div>
-            <p className="text-sm text-gray-700">We sent a 6-digit code to</p>
-            <p className="font-medium text-gray-900 mt-0.5">{maskEmail(details.email)}</p>
+            <p className="text-sm text-ink-600">We sent a 6-digit code to</p>
+            <p className="font-medium text-ink-900 mt-0.5">{maskEmail(details.email)}</p>
           </div>
 
           {/* OTP input boxes */}
           <div>
-            <label className="block text-sm text-gray-700 mb-3 text-center">Enter verification code</label>
+            <label className="block text-sm text-ink-600 mb-3 text-center">Enter verification code</label>
             <OtpBoxes value={enteredOtp} onChange={v => { setEnteredOtp(v); setOtpError(''); }} />
             {otpError && (
-              <p className="text-xs text-red-600 mt-2 flex items-center justify-center gap-1">
+              <p role="alert" className="text-xs text-rose-600 mt-2.5 flex items-center justify-center gap-1">
                 <AlertCircle size={11} /> {otpError}
               </p>
             )}
           </div>
 
-          <button type="submit" disabled={verifyingOtp} className="w-full flex items-center justify-center gap-2 text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
-            style={{ backgroundColor: '#1D3A5F' }}>
+          <PrimaryButton type="submit" disabled={verifyingOtp} className="w-full">
             <ShieldCheck size={15} /> {verifyingOtp ? 'Verifying…' : 'Verify Code'}
-          </button>
+          </PrimaryButton>
 
           {/* Resend */}
-          <div className="text-center text-sm text-gray-500">
+          <div className="text-center text-sm text-ink-500">
             {countdown > 0 ? (
-              <span>Resend code in <span className="font-medium" style={{ color: '#1D3A5F' }}>{countdown}s</span></span>
+              <span>Resend code in <span className="font-semibold text-brand-700 tabular">{countdown}s</span></span>
             ) : (
               <button type="button" onClick={handleResend} disabled={sendingOtp}
-                className="flex items-center gap-1.5 mx-auto font-medium hover:opacity-80 disabled:opacity-60 transition-opacity"
-                style={{ color: '#1D3A5F' }}>
+                className={`flex items-center gap-1.5 mx-auto disabled:opacity-60 ${LINK_BTN_CLS}`}>
                 <RefreshCw size={13} /> {sendingOtp ? 'Resending…' : 'Resend OTP'}
               </button>
             )}
           </div>
 
-          <button type="button" onClick={() => setStep('details')}
-            className="w-full flex items-center justify-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors">
+          <button type="button" onClick={() => setStep('details')} className={QUIET_BTN_CLS}>
             <ArrowLeft size={14} /> Back
           </button>
         </form>
@@ -478,15 +486,15 @@ function RegisterForm({ onRegister, onSwitchToLogin }: {
       {/* ── STEP 3: Password ── */}
       {step === 'password' && (
         <form onSubmit={handleCreateAccount} className="space-y-4">
-          <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-2">
-            <CheckCircle size={16} className="text-green-600 shrink-0" />
+          <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 mb-2">
+            <CheckCircle size={16} className="text-emerald-600 shrink-0" />
             <div>
-              <p className="text-sm font-medium text-green-800">Email verified</p>
-              <p className="text-xs text-green-700">{details.email}</p>
+              <p className="text-sm font-semibold text-emerald-800">Email verified</p>
+              <p className="text-xs text-emerald-700">{details.email}</p>
             </div>
           </div>
 
-          <p className="text-sm text-gray-600">Choose a secure password for your account.</p>
+          <p className="text-sm text-ink-600">Choose a secure password for your account.</p>
 
           <RegField label="New Password" error={pwErrors.password}>
             <div className="relative">
@@ -495,12 +503,13 @@ function RegisterForm({ onRegister, onSwitchToLogin }: {
                 placeholder="Minimum 8 characters"
                 className={inputCls(!!pwErrors.password) + ' pr-11'} onFocus={focusStyle} onBlur={blurStyle} />
               <button type="button" onClick={() => setShowPw(s => !s)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                aria-label={showPw ? 'Hide password' : 'Show password'}
+                className={REVEAL_BTN_CLS}>
                 {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
             {password.length >= 8 && !pwErrors.password && (
-              <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><CheckCircle size={11} /> Strong password</p>
+              <p className="text-xs text-emerald-600 mt-1.5 flex items-center gap-1"><CheckCircle size={11} /> Strong password</p>
             )}
           </RegField>
 
@@ -511,26 +520,25 @@ function RegisterForm({ onRegister, onSwitchToLogin }: {
                 placeholder="Re-enter your password"
                 className={inputCls(!!pwErrors.confirm) + ' pr-11'} onFocus={focusStyle} onBlur={blurStyle} />
               <button type="button" onClick={() => setShowConfirm(s => !s)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                aria-label={showConfirm ? 'Hide password' : 'Show password'}
+                className={REVEAL_BTN_CLS}>
                 {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
           </RegField>
 
           {createError && (
-            <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+            <div role="alert" className={ALERT_CLS}>
               <AlertCircle size={15} className="shrink-0" />
               <p className="text-sm">{createError}</p>
             </div>
           )}
 
-          <button type="submit" disabled={creating} className="w-full text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity mt-2"
-            style={{ backgroundColor: '#1D3A5F' }}>
+          <PrimaryButton type="submit" disabled={creating} className="w-full mt-2">
             {creating ? 'Creating Account…' : 'Create Account'}
-          </button>
+          </PrimaryButton>
 
-          <button type="button" onClick={() => setStep('otp')}
-            className="w-full flex items-center justify-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors">
+          <button type="button" onClick={() => setStep('otp')} className={QUIET_BTN_CLS}>
             <ArrowLeft size={14} /> Back
           </button>
         </form>
@@ -625,11 +633,11 @@ function ForgotPasswordForm({ onReset, onSwitchToLogin }: {
   if (success) {
     return (
       <div className="text-center py-16">
-        <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#1D3A5F' }}>
+        <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5 bg-brand-700 shadow-[var(--shadow-md)]">
           <CheckCircle size={30} className="text-white" />
         </div>
-        <h2 className="text-xl text-gray-900 mb-2">Password reset!</h2>
-        <p className="text-sm text-gray-500">Signing you in now…</p>
+        <h2 className="display-lg text-ink-900 mb-1.5">Password reset</h2>
+        <p className="text-sm text-ink-500">Signing you in now…</p>
       </div>
     );
   }
@@ -638,8 +646,9 @@ function ForgotPasswordForm({ onReset, onSwitchToLogin }: {
     return (
       <div>
         <div className="mb-8">
-          <h1 className="font-serif text-3xl text-gray-900 mb-1.5" style={{ color: NAVY }}>Reset your password</h1>
-          <p className="text-sm text-gray-500">Enter your account email and we'll send you a reset code.</p>
+          <p className="eyebrow mb-2">Account recovery</p>
+          <h1 className="display-xl text-brand-700 mb-1.5">Reset your password</h1>
+          <p className="text-sm text-ink-500">Enter your account email and we'll send you a reset code.</p>
         </div>
 
         <form onSubmit={handleSendOtp} className="space-y-4">
@@ -650,13 +659,11 @@ function ForgotPasswordForm({ onReset, onSwitchToLogin }: {
               className={inputCls(!!emailError)} onFocus={focusStyle} onBlur={blurStyle} />
           </RegField>
 
-          <button type="submit" disabled={sendingOtp} className="w-full flex items-center justify-center gap-2 text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity mt-2"
-            style={{ backgroundColor: '#1D3A5F' }}>
+          <PrimaryButton type="submit" disabled={sendingOtp} className="w-full mt-2">
             <Mail size={15} /> {sendingOtp ? 'Sending…' : 'Send Reset Code'}
-          </button>
+          </PrimaryButton>
 
-          <button type="button" onClick={onSwitchToLogin}
-            className="w-full flex items-center justify-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors pt-1">
+          <button type="button" onClick={onSwitchToLogin} className={`${QUIET_BTN_CLS} pt-1`}>
             <ArrowLeft size={14} /> Back to sign in
           </button>
         </form>
@@ -667,23 +674,24 @@ function ForgotPasswordForm({ onReset, onSwitchToLogin }: {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="font-serif text-3xl mb-1.5" style={{ color: NAVY }}>Reset your password</h1>
+        <p className="eyebrow mb-2">Account recovery</p>
+        <h1 className="display-xl text-brand-700 mb-1.5">Reset your password</h1>
       </div>
 
       <form onSubmit={handleResetPassword} className="space-y-5">
         <div className="text-center mb-2">
-          <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#1D3A5F' }}>
+          <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 bg-brand-700 shadow-[var(--shadow-md)]">
             <KeyRound size={24} className="text-white" />
           </div>
-          <p className="text-sm text-gray-700">We sent a 6-digit code to</p>
-          <p className="font-medium text-gray-900 mt-0.5">{maskEmail(email)}</p>
+          <p className="text-sm text-ink-600">We sent a 6-digit code to</p>
+          <p className="font-medium text-ink-900 mt-0.5">{maskEmail(email)}</p>
         </div>
 
         <div>
-          <label className="block text-sm text-gray-700 mb-3 text-center">Enter verification code</label>
+          <label className="block text-sm text-ink-600 mb-3 text-center">Enter verification code</label>
           <OtpBoxes value={enteredOtp} onChange={v => { setEnteredOtp(v); setResetErrors(p => ({ ...p, otp: '' })); }} />
           {resetErrors.otp && (
-            <p className="text-xs text-red-600 mt-2 flex items-center justify-center gap-1">
+            <p role="alert" className="text-xs text-rose-600 mt-2.5 flex items-center justify-center gap-1">
               <AlertCircle size={11} /> {resetErrors.otp}
             </p>
           )}
@@ -696,7 +704,8 @@ function ForgotPasswordForm({ onReset, onSwitchToLogin }: {
               placeholder="Minimum 8 characters"
               className={inputCls(!!resetErrors.password) + ' pr-11'} onFocus={focusStyle} onBlur={blurStyle} />
             <button type="button" onClick={() => setShowPw(s => !s)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              aria-label={showPw ? 'Hide password' : 'Show password'}
+              className={REVEAL_BTN_CLS}>
               {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
@@ -709,31 +718,29 @@ function ForgotPasswordForm({ onReset, onSwitchToLogin }: {
               placeholder="Re-enter your password"
               className={inputCls(!!resetErrors.confirm) + ' pr-11'} onFocus={focusStyle} onBlur={blurStyle} />
             <button type="button" onClick={() => setShowConfirm(s => !s)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              aria-label={showConfirm ? 'Hide password' : 'Show password'}
+              className={REVEAL_BTN_CLS}>
               {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
         </RegField>
 
-        <button type="submit" disabled={resetting} className="w-full text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
-          style={{ backgroundColor: '#1D3A5F' }}>
+        <PrimaryButton type="submit" disabled={resetting} className="w-full">
           {resetting ? 'Resetting…' : 'Reset Password'}
-        </button>
+        </PrimaryButton>
 
-        <div className="text-center text-sm text-gray-500">
+        <div className="text-center text-sm text-ink-500">
           {countdown > 0 ? (
-            <span>Resend code in <span className="font-medium" style={{ color: '#1D3A5F' }}>{countdown}s</span></span>
+            <span>Resend code in <span className="font-semibold text-brand-700 tabular">{countdown}s</span></span>
           ) : (
             <button type="button" onClick={handleResend} disabled={sendingOtp}
-              className="flex items-center gap-1.5 mx-auto font-medium hover:opacity-80 disabled:opacity-60 transition-opacity"
-              style={{ color: '#1D3A5F' }}>
+              className={`flex items-center gap-1.5 mx-auto disabled:opacity-60 ${LINK_BTN_CLS}`}>
               <RefreshCw size={13} /> {sendingOtp ? 'Resending…' : 'Resend Code'}
             </button>
           )}
         </div>
 
-        <button type="button" onClick={() => setStep('request')}
-          className="w-full flex items-center justify-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors">
+        <button type="button" onClick={() => setStep('request')} className={QUIET_BTN_CLS}>
           <ArrowLeft size={14} /> Back
         </button>
       </form>
@@ -790,15 +797,17 @@ function OtpBoxes({ value, onChange }: { value: string; onChange: (v: string) =>
           inputMode="numeric"
           maxLength={2}
           value={d}
+          aria-label={`Verification code digit ${i + 1}`}
           onChange={e => handleChange(i, e.target.value)}
           onKeyDown={e => handleKeyDown(i, e)}
           onPaste={handlePaste}
           onFocus={e => e.currentTarget.select()}
-          className={`w-10 h-12 sm:w-12 sm:h-14 text-center border-2 rounded-xl text-lg font-mono font-bold focus:outline-none transition-all ${
-            d ? 'border-[#1D3A5F] bg-[#1D3A5F]/5 text-[#1D3A5F]' : 'border-gray-300 text-gray-700'
+          className={`w-10 h-12 sm:w-12 sm:h-14 text-center border-2 rounded-xl text-lg font-mono font-bold tabular
+                      outline-none transition-all duration-[var(--dur)] ease-[var(--ease-out)] ${
+            d ? 'border-brand-700 bg-brand-50 text-brand-700' : 'border-[var(--hairline-strong)] bg-white text-ink-700'
           }`}
           style={{ boxShadow: d ? '0 0 0 0px transparent' : undefined }}
-          onFocusCapture={e => { e.currentTarget.style.borderColor = '#1D3A5F'; e.currentTarget.style.boxShadow = '0 0 0 2px #1D3A5F30'; }}
+          onFocusCapture={e => { e.currentTarget.style.borderColor = 'var(--brand-700)'; e.currentTarget.style.boxShadow = 'var(--shadow-focus)'; }}
           onBlurCapture={e => { if (!e.currentTarget.value) { e.currentTarget.style.borderColor = ''; e.currentTarget.style.boxShadow = ''; } }}
         />
       ))}
@@ -813,7 +822,7 @@ function RegField({ label, error, children }: { label: string; error?: string; c
       <label className={LABEL_CLS}>{label}</label>
       {children}
       {error && (
-        <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+        <p role="alert" className="text-xs text-rose-600 mt-1.5 flex items-center gap-1">
           <AlertCircle size={11} className="shrink-0" /> {error}
         </p>
       )}
@@ -822,13 +831,13 @@ function RegField({ label, error, children }: { label: string; error?: string; c
 }
 
 function inputCls(hasError: boolean) {
-  return `w-full border ${hasError ? 'border-red-400 bg-red-50' : 'border-gray-300'} rounded-xl px-4 py-2.5 text-sm focus:outline-none transition-colors`;
+  return `${INPUT_BASE} ${hasError ? 'border-rose-300 bg-rose-50/50' : 'border-[var(--hairline)] bg-white'}`;
 }
 
 // Generic over the element type so the same handlers work on <input> and <select>.
 function focusStyle(e: React.FocusEvent<HTMLElement>) {
-  e.currentTarget.style.boxShadow = '0 0 0 2px #1D3A5F40';
-  e.currentTarget.style.borderColor = '#1D3A5F';
+  e.currentTarget.style.boxShadow = 'var(--shadow-focus)';
+  e.currentTarget.style.borderColor = 'var(--brand-400)';
 }
 
 function blurStyle(e: React.FocusEvent<HTMLElement>) {

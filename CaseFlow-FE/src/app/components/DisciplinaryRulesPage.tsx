@@ -1,6 +1,7 @@
-import { Check, Minus } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { ArrowLeftRight, Ban, Check, Gavel, Hourglass, Minus } from 'lucide-react';
 import { PageHeader } from './DashboardLayout';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from './ui/table';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableCaption } from './ui/table';
 
 interface OffenseRule {
   id: string;
@@ -35,34 +36,76 @@ const OFFENSE_RULES: OffenseRule[] = [
   { id: '16', offense: 'Academic dishonesty (cheating/plagiarism)', measure: 'Suspension (or course grade nullified)', duration: '1+', suspensionType: 'Fixed-minimum', reEntryMethod: 'Automatic or committee decision', semesterVoided: 'Depends on severity', priorCoursesRetained: 'Yes', reportToPolice: 'No' },
 ];
 
-const MEASURE_STYLES: Record<string, string> = {
-  'Warning': 'bg-yellow-50 text-yellow-700 border-yellow-200',
-  'Suspension': 'bg-red-50 text-red-700 border-red-200',
-  'Suspension or fine': 'bg-orange-50 text-orange-700 border-orange-200',
-  'Suspension or Dismissal': 'bg-orange-50 text-orange-700 border-orange-200',
-  'Suspension (or course grade nullified)': 'bg-red-50 text-red-700 border-red-200',
-  'Dismissal': 'bg-red-100 text-red-800 border-red-300',
+/**
+ * Measure tones deliberately reuse StatusBadge's vocabulary (tinted fill, inset ring, leading dot)
+ * so a sanction named here reads the same as the same sanction shown on a live case.
+ */
+const MEASURE_STYLES: Record<string, { cls: string; dot: string }> = {
+  'Warning': { cls: 'bg-yellow-50 text-yellow-800 ring-yellow-200/70', dot: 'bg-yellow-500' },
+  'Suspension': { cls: 'bg-rose-50 text-rose-800 ring-rose-200/70', dot: 'bg-rose-500' },
+  'Suspension or fine': { cls: 'bg-amber-50 text-amber-800 ring-amber-200/70', dot: 'bg-amber-500' },
+  'Suspension or Dismissal': { cls: 'bg-orange-50 text-orange-800 ring-orange-200/70', dot: 'bg-orange-500' },
+  'Suspension (or course grade nullified)': { cls: 'bg-rose-50 text-rose-800 ring-rose-200/70', dot: 'bg-rose-500' },
+  'Dismissal': { cls: 'bg-rose-100 text-rose-900 ring-rose-300/70', dot: 'bg-rose-700' },
 };
 
 function MeasureBadge({ measure }: { measure: string }) {
+  const tone = MEASURE_STYLES[measure] || { cls: 'bg-ink-100 text-ink-600 ring-ink-200', dot: 'bg-ink-400' };
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border whitespace-nowrap ${MEASURE_STYLES[measure] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+    <span
+      className={`inline-flex items-center gap-1.5 pl-1.5 pr-2.5 py-0.5 rounded-full font-tight text-[11px] font-semibold
+                  ring-1 ring-inset whitespace-nowrap ${tone.cls}`}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${tone.dot}`} aria-hidden="true" />
       {measure}
     </span>
   );
 }
 
+/**
+ * Yes/No columns. The tick is brand navy rather than green on purpose: several of these flags
+ * ("Report to Police: Yes") are not good news, and a green tick would imply a verdict the schedule
+ * isn't making. Anything that isn't a flat yes or no is a judgement call, so it's tinted amber.
+ */
 function FlagCell({ value }: { value: string }) {
   if (value === 'Yes' || value === 'No') {
     return (
-      <span className={`inline-flex items-center gap-1 text-xs ${value === 'Yes' ? 'text-gray-700' : 'text-gray-400'}`}>
-        {value === 'Yes' ? <Check size={12} className="text-green-600" /> : <Minus size={12} />}
+      <span className={`inline-flex items-center gap-1.5 font-tight text-[12px] ${value === 'Yes' ? 'text-ink-700' : 'text-ink-400'}`}>
+        {value === 'Yes'
+          ? <Check size={13} className="text-brand-600 shrink-0" aria-hidden="true" />
+          : <Minus size={13} className="text-ink-300 shrink-0" aria-hidden="true" />}
         {value}
       </span>
     );
   }
-  return <span className="text-xs text-amber-700">{value}</span>;
+  return (
+    <span className="inline-flex items-start gap-1.5 font-tight text-[12px] text-amber-700">
+      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1.5" aria-hidden="true" />
+      {value}
+    </span>
+  );
 }
+
+/** Purely presentational wrapper for the three interpretation notes below the schedule. */
+function RuleNote({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
+  return (
+    <div className="card p-6">
+      <div className="flex items-center gap-2.5 mb-3">
+        <span
+          className="w-8 h-8 rounded-full bg-brand-50 text-brand-700 flex items-center justify-center shrink-0"
+          aria-hidden="true"
+        >
+          {icon}
+        </span>
+        <p className="eyebrow">{label}</p>
+      </div>
+      <p className="text-[13px] text-ink-600 leading-relaxed">{children}</p>
+    </div>
+  );
+}
+
+const HEAD_CELL = 'eyebrow font-semibold text-ink-500 h-auto px-4 py-3 align-bottom';
+const BODY_CELL = 'px-4 py-3.5 align-top';
 
 export function DisciplinaryRulesPage() {
   return (
@@ -71,56 +114,81 @@ export function DisciplinaryRulesPage() {
         title="Disciplinary Rules & Regulations"
         subtitle="Official offense categories and mandated measures — AUCA Student Handbook 2018–2021, Chapter IX"
       />
-      <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6">
-        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Offense</TableHead>
-                <TableHead>Measure</TableHead>
-                <TableHead>Duration (semesters)</TableHead>
-                <TableHead>Suspension Type</TableHead>
-                <TableHead>Re-entry Method</TableHead>
-                <TableHead>Current Semester Voided</TableHead>
-                <TableHead>Prior Courses Retained</TableHead>
-                <TableHead>Report to Police</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {OFFENSE_RULES.map(rule => (
-                <TableRow key={rule.id}>
-                  <TableCell className="text-gray-400 font-mono text-xs">{rule.id}</TableCell>
-                  <TableCell className="whitespace-normal min-w-[240px] text-gray-800">{rule.offense}</TableCell>
-                  <TableCell><MeasureBadge measure={rule.measure} /></TableCell>
-                  <TableCell className="text-gray-600">{rule.duration}</TableCell>
-                  <TableCell className="text-gray-600">{rule.suspensionType}</TableCell>
-                  <TableCell className="text-gray-600">{rule.reEntryMethod}</TableCell>
-                  <TableCell><FlagCell value={rule.semesterVoided} /></TableCell>
-                  <TableCell><FlagCell value={rule.priorCoursesRetained} /></TableCell>
-                  <TableCell><FlagCell value={rule.reportToPolice} /></TableCell>
+      <div className="flex-1 overflow-y-auto p-4 sm:p-8">
+        <div className="mx-auto w-full max-w-[1500px] space-y-6 rise">
+          <section className="card overflow-hidden">
+            <div className="flex flex-wrap items-end justify-between gap-3 px-4 sm:px-6 py-5 border-b border-[var(--hairline)]">
+              <div className="min-w-0">
+                <p className="eyebrow">Chapter IX · Schedule of offenses</p>
+                <h2 className="display-md text-ink-900 mt-1.5">Offenses and mandated measures</h2>
+              </div>
+              <p className="flex xl:hidden items-center gap-1.5 font-tight text-[12px] text-ink-400">
+                <ArrowLeftRight size={13} aria-hidden="true" />
+                Scroll sideways for the full row
+              </p>
+            </div>
+            <Table>
+              <TableCaption className="sr-only">
+                Offense categories with the mandated measure, duration, suspension type, re-entry method, and academic
+                and reporting consequences for each.
+              </TableCaption>
+              <TableHeader>
+                <TableRow className="bg-ink-50/70 border-b border-[var(--hairline)] hover:bg-ink-50/70">
+                  <TableHead className={HEAD_CELL} scope="col">ID</TableHead>
+                  <TableHead className={HEAD_CELL} scope="col">Offense</TableHead>
+                  <TableHead className={HEAD_CELL} scope="col">Measure</TableHead>
+                  <TableHead className={`${HEAD_CELL} whitespace-normal max-w-[6rem]`} scope="col">Duration (semesters)</TableHead>
+                  <TableHead className={`${HEAD_CELL} whitespace-normal max-w-[7rem]`} scope="col">Suspension type</TableHead>
+                  <TableHead className={HEAD_CELL} scope="col">Re-entry method</TableHead>
+                  <TableHead className={`${HEAD_CELL} whitespace-normal max-w-[7rem]`} scope="col">Current semester voided</TableHead>
+                  <TableHead className={`${HEAD_CELL} whitespace-normal max-w-[7rem]`} scope="col">Prior courses retained</TableHead>
+                  <TableHead className={`${HEAD_CELL} whitespace-normal max-w-[6rem]`} scope="col">Report to police</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHeader>
+              <TableBody>
+                {OFFENSE_RULES.map(rule => (
+                  <TableRow
+                    key={rule.id}
+                    className="border-b border-[var(--hairline)] hover:bg-brand-50/40 transition-colors duration-[var(--dur)] ease-[var(--ease-out)]"
+                  >
+                    <TableCell className={`${BODY_CELL} font-mono tabular text-[11px] text-ink-400 pt-4`}>{rule.id}</TableCell>
+                    <TableCell className={`${BODY_CELL} whitespace-normal min-w-[240px] max-w-[380px] text-[13px] leading-relaxed text-ink-900`}>
+                      {rule.offense}
+                    </TableCell>
+                    <TableCell className={BODY_CELL}><MeasureBadge measure={rule.measure} /></TableCell>
+                    <TableCell className={`${BODY_CELL} tabular text-[13px] text-ink-600`}>{rule.duration}</TableCell>
+                    <TableCell className={`${BODY_CELL} text-[13px] text-ink-600`}>{rule.suspensionType}</TableCell>
+                    <TableCell className={`${BODY_CELL} text-[13px] text-ink-600`}>{rule.reEntryMethod}</TableCell>
+                    <TableCell className={BODY_CELL}><FlagCell value={rule.semesterVoided} /></TableCell>
+                    <TableCell className={BODY_CELL}><FlagCell value={rule.priorCoursesRetained} /></TableCell>
+                    <TableCell className={BODY_CELL}><FlagCell value={rule.reportToPolice} /></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </section>
 
-        <div className="grid sm:grid-cols-3 gap-4">
-          <div className="bg-white rounded-2xl border border-gray-200 p-5">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">On Dismissal</p>
-            <p className="text-sm text-gray-700 leading-relaxed">No prior completed courses count if the student is later readmitted as a new student.</p>
-          </div>
-          <div className="bg-white rounded-2xl border border-gray-200 p-5">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">On Suspension</p>
-            <p className="text-sm text-gray-700 leading-relaxed">Prior completed semesters remain valid; only the semester in progress at the time of suspension is voided (if suspension starts after the first month of the semester).</p>
-          </div>
-          <div className="bg-white rounded-2xl border border-gray-200 p-5">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Appeals</p>
-            <p className="text-sm text-gray-700 leading-relaxed">Must be filed within 7 calendar days, addressed to the Rector, copied to the Dean of Students; only 1 appeal allowed per disciplinary stage.</p>
-          </div>
-        </div>
+          <section className="grid sm:grid-cols-3 gap-4">
+            <RuleNote icon={<Ban size={15} />} label="On Dismissal">
+              No prior completed courses count if the student is later readmitted as a new student.
+            </RuleNote>
+            <RuleNote icon={<Hourglass size={15} />} label="On Suspension">
+              Prior completed semesters remain valid; only the semester in progress at the time of suspension is voided
+              (if suspension starts after the first month of the semester).
+            </RuleNote>
+            <RuleNote icon={<Gavel size={15} />} label="Appeals">
+              Must be filed within 7 calendar days, addressed to the Rector and copied to the Dean of Students; only one
+              appeal is allowed per disciplinary stage.
+            </RuleNote>
+          </section>
 
-        <p className="text-xs text-gray-400">Source: AUCA Student Handbook 2018–2021, Chapter IX (Disciplinary Regulations). This is reference material only — it does not affect how incidents are reported or decided in CaseFlow.</p>
+          <footer className="border-t border-[var(--hairline)] pt-4">
+            <p className="font-tight text-[12px] leading-relaxed text-ink-400 max-w-[80ch]">
+              Source: AUCA Student Handbook 2018–2021, Chapter IX (Disciplinary Regulations). Reference material only —
+              it does not affect how incidents are reported or decided in CaseFlow.
+            </p>
+          </footer>
+        </div>
       </div>
     </>
   );

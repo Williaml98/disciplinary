@@ -80,6 +80,8 @@ export interface CaseStats {
   restricted: number;
   activeSuspensions: number;
   expiredSuspensions: number;
+  /** Restricted with no end date — expulsions. */
+  indefiniteRestrictions: number;
   registrationHolds: number;
 }
 

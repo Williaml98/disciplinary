@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { FilePlus, List, ChevronRight, Paperclip, AlertCircle, Scale, ImagePlus, X, BarChart3 } from 'lucide-react';
-import { DashboardLayout, PageHeader, StatusBadge, EvidenceGallery } from './DashboardLayout';
+import {
+  FilePlus, List, ChevronRight, Paperclip, AlertCircle, Scale, ImagePlus, X, BarChart3,
+  ArrowLeft, CheckCircle2, Send, ShieldAlert, SearchX,
+} from 'lucide-react';
+import { DashboardLayout, PageHeader, PrimaryButton, StatusBadge, EvidenceGallery } from './DashboardLayout';
 import { DisciplinaryRulesPage } from './DisciplinaryRulesPage';
 import { ReportsPage } from './ReportsPage';
 import { OFFENSE_TYPES } from './offenseTypes';
@@ -11,6 +14,14 @@ import { useDebouncedValue } from '../../lib/hooks';
 import { Pagination } from './Pagination';
 import { SearchInput } from './SearchInput';
 import { notifyError, notifySuccess, toMessage, toast } from '../../lib/toast';
+
+/** One control treatment for every text input, select and textarea on this screen. */
+const fieldClass =
+  'w-full rounded-xl border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-[13px] text-ink-800 ' +
+  'placeholder-ink-400 outline-none transition-all duration-[var(--dur)] ease-[var(--ease-out)] ' +
+  'focus:border-brand-400 focus:shadow-[var(--shadow-focus)]';
+
+const labelClass = 'block text-[13px] font-medium text-ink-700 mb-1.5';
 
 /** A file staged for upload, paired with the blob URL used to preview it. */
 interface PendingEvidence {
@@ -50,17 +61,18 @@ export function LecturerDashboard({ user, onLogout, onUpdateProfile }: Props) {
   const [caseSearch, setCaseSearch] = useState('');
   const debouncedCaseSearch = useDebouncedValue(caseSearch, 300);
 
-  // reportedByExact, not the report endpoint's substring match: "Marie Uwase" must not be shown the
-  // cases filed by "Dr. Marie Uwase". Search narrows within that, server-side.
+  // Keyed on the account id so renaming yourself doesn't orphan your cases; the name is still sent
+  // as a fallback for cases filed before the id column existed. Search narrows within that.
+  const mine = { reportedByUserId: user.id, reportedByExact: user.name };
   const paged = usePagedCases(
-    { reportedByExact: user.name, search: debouncedCaseSearch || undefined },
+    { ...mine, search: debouncedCaseSearch || undefined },
     { size: 20, sort: 'reportDate,desc' },
   );
   const myCases = paged.items;
 
   // Deliberately unfiltered. The nav badge answers "how many cases have I filed", so it must not move
   // when the search box narrows the list — size 1 because only the count is used.
-  const myCaseTotal = usePagedCases({ reportedByExact: user.name }, { size: 1 });
+  const myCaseTotal = usePagedCases(mine, { size: 1 });
 
   // Revoke whatever is still outstanding when the component goes away. Individual URLs are revoked
   // as their file is removed; this only catches the ones still on screen at unmount.
@@ -155,87 +167,112 @@ export function LecturerDashboard({ user, onLogout, onUpdateProfile }: Props) {
         <>
           <PageHeader title="Report New Incident" subtitle="Submit a disciplinary incident for committee review" />
           <div className="flex-1 overflow-y-auto p-4 sm:p-8">
-            <div className="max-w-2xl mx-auto">
+            <div className="max-w-2xl mx-auto rise">
               {submitted && (
-                <div className="mb-6 bg-green-50 border border-green-200 text-green-800 rounded-xl p-4 flex items-center gap-3">
-                  <AlertCircle size={18} className="text-green-600 shrink-0" />
-                  <div>
-                    <p className="font-medium text-sm">Incident reported successfully</p>
-                    <p className="text-xs mt-0.5 text-green-700">The case has been created and the disciplinary committee has been notified.</p>
+                <div className="mb-6 flex items-start gap-3 rounded-2xl border border-emerald-200/70 bg-emerald-50 p-4">
+                  <span className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                    <CheckCircle2 size={16} className="text-emerald-700" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-emerald-900">Incident reported successfully</p>
+                    <p className="text-[13px] mt-0.5 text-emerald-800/80">
+                      The case has been created and the disciplinary committee has been notified.
+                    </p>
                   </div>
                 </div>
               )}
-              <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
+              <form onSubmit={handleSubmit} className="card p-6 sm:p-7 space-y-6">
                 <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Student Information</p>
+                  <p className="eyebrow mb-1">Student Information</p>
+                  <p className="text-[13px] text-ink-500 mb-4">Who the report concerns.</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm text-gray-700 mb-1.5">Student Full Name <span className="text-red-500">*</span></label>
+                      <label className={labelClass} htmlFor="studentName">
+                        Student Full Name <span className="text-rose-500">*</span>
+                      </label>
                       <input
+                        id="studentName"
                         type="text"
                         required
                         value={form.studentName}
                         onChange={e => setForm(f => ({ ...f, studentName: e.target.value }))}
                         placeholder="e.g. Jean Bosco Habimana"
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3A5F] focus:border-transparent"
+                        className={fieldClass}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm text-gray-700 mb-1.5">Student ID <span className="text-red-500">*</span></label>
+                      <label className={labelClass} htmlFor="studentId">
+                        Student ID <span className="text-rose-500">*</span>
+                      </label>
                       <input
+                        id="studentId"
                         type="text"
                         required
                         value={form.studentId}
                         onChange={e => setForm(f => ({ ...f, studentId: e.target.value }))}
                         placeholder="e.g. 21045"
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3A5F] focus:border-transparent"
+                        className={`${fieldClass} font-mono tabular`}
                       />
                     </div>
                   </div>
                 </div>
 
-                <div className="border-t border-gray-100 pt-5">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Incident Details</p>
+                <div className="border-t border-[var(--hairline)] pt-6">
+                  <p className="eyebrow mb-1">Incident Details</p>
+                  <p className="text-[13px] text-ink-500 mb-4">What happened, in the committee's words as well as yours.</p>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm text-gray-700 mb-1.5">Offense Type <span className="text-red-500">*</span></label>
+                      <label className={labelClass} htmlFor="offenseType">
+                        Offense Type <span className="text-rose-500">*</span>
+                      </label>
                       <select
+                        id="offenseType"
                         required
                         value={form.offenseType}
                         onChange={e => setForm(f => ({ ...f, offenseType: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3A5F] focus:border-transparent bg-white"
+                        className={fieldClass}
                       >
                         <option value="">Select offense type...</option>
                         {OFFENSE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm text-gray-700 mb-1.5">Description of Incident <span className="text-red-500">*</span></label>
+                      <label className={labelClass} htmlFor="description">
+                        Description of Incident <span className="text-rose-500">*</span>
+                      </label>
                       <textarea
+                        id="description"
                         required
                         rows={5}
                         value={form.description}
                         onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                         placeholder="Provide a detailed description of the incident, including date, time, location, and what occurred..."
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3A5F] focus:border-transparent resize-none"
+                        className={`${fieldClass} resize-none leading-relaxed`}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm text-gray-700 mb-1.5">
-                        <span className="flex items-center gap-1.5"><Paperclip size={14} /> Evidence Description</span>
+                      <label className={labelClass} htmlFor="evidence">
+                        <span className="flex items-center gap-1.5">
+                          <Paperclip size={14} className="text-ink-400" /> Evidence Description
+                        </span>
                       </label>
                       <textarea
+                        id="evidence"
                         rows={2}
                         value={form.evidence}
                         onChange={e => setForm(f => ({ ...f, evidence: e.target.value }))}
                         placeholder="Describe any physical or digital evidence (e.g. confiscated notes, screenshots, witness statements)..."
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D3A5F] focus:border-transparent resize-none"
+                        className={`${fieldClass} resize-none leading-relaxed`}
                       />
-                      <p className="text-xs text-gray-400 mt-1">Physical evidence should be submitted to the Student Affairs office with case reference number.</p>
+                      <p className="text-[12px] text-ink-400 mt-1.5">
+                        Physical evidence should be submitted to the Student Affairs office with case reference number.
+                      </p>
                     </div>
                     <div>
-                      <label className="block text-sm text-gray-700 mb-1.5">
-                        <span className="flex items-center gap-1.5"><ImagePlus size={14} /> Evidence Photos</span>
+                      <label className={labelClass}>
+                        <span className="flex items-center gap-1.5">
+                          <ImagePlus size={14} className="text-ink-400" /> Evidence Photos
+                        </span>
                       </label>
                       <input
                         ref={fileInputRef}
@@ -244,47 +281,64 @@ export function LecturerDashboard({ user, onLogout, onUpdateProfile }: Props) {
                         multiple
                         onChange={e => { addEvidenceFiles(e.target.files); e.target.value = ''; }}
                         className="hidden"
+                        aria-label="Choose evidence photos"
                       />
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
-                        className="w-full flex items-center justify-center gap-2 border border-dashed border-gray-300 rounded-lg py-3 text-sm text-gray-500 hover:border-[#1D3A5F]/40 hover:text-[#1D3A5F] transition-colors"
+                        className="w-full flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-[var(--hairline-strong)]
+                                   bg-ink-50/60 py-5 text-ink-500
+                                   hover:border-brand-400 hover:bg-brand-50/50 hover:text-brand-700
+                                   transition-all duration-[var(--dur)] ease-[var(--ease-out)]"
                       >
-                        <ImagePlus size={15} /> Upload one or more photos
+                        <ImagePlus size={18} />
+                        <span className="text-[13px] font-medium">Upload one or more photos</span>
+                        <span className="text-[11px] font-tight text-ink-400">JPG, PNG, GIF or WEBP</span>
                       </button>
                       {evidenceFiles.length > 0 && (
-                        <div className="flex flex-wrap gap-3 mt-3">
-                          {evidenceFiles.map((item, i) => (
-                            <div key={item.previewUrl} className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 shrink-0">
-                              <img src={item.previewUrl} alt={item.file.name} className="w-full h-full object-cover" />
-                              <button
-                                type="button"
-                                onClick={() => removeEvidenceFile(i)}
-                                className="absolute top-0.5 right-0.5 bg-black/60 hover:bg-black/80 text-white rounded-full p-0.5 transition-colors"
+                        <div className="mt-3 rounded-xl border border-[var(--hairline)] bg-ink-50/60 p-3">
+                          <p className="eyebrow mb-2.5 tabular">
+                            {evidenceFiles.length} photo{evidenceFiles.length !== 1 ? 's' : ''} attached
+                          </p>
+                          <div className="flex flex-wrap gap-2.5">
+                            {evidenceFiles.map((item, i) => (
+                              <div
+                                key={item.previewUrl}
+                                className="group relative w-[68px] h-[68px] rounded-xl overflow-hidden bg-white shrink-0
+                                           ring-1 ring-[var(--hairline-strong)] shadow-[var(--shadow-xs)]"
                               >
-                                <X size={10} />
-                              </button>
-                            </div>
-                          ))}
+                                <img src={item.previewUrl} alt={item.file.name} className="w-full h-full object-cover" />
+                                <button
+                                  type="button"
+                                  onClick={() => removeEvidenceFile(i)}
+                                  aria-label={`Remove ${item.file.name}`}
+                                  className="absolute top-1 right-1 rounded-full bg-ink-950/60 p-1 text-white
+                                             hover:bg-ink-950/85 transition-colors duration-[var(--dur)] ease-[var(--ease-out)]"
+                                >
+                                  <X size={10} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>
                   </div>
                 </div>
 
-                <div className="border-t border-gray-100 pt-5">
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
-                    <p className="text-xs text-amber-800">
-                      <strong>Note:</strong> By submitting this form, you confirm that the information provided is accurate and complete to the best of your knowledge. Submitting false reports is itself a disciplinary offense.
+                <div className="border-t border-[var(--hairline)] pt-6">
+                  <div className="flex items-start gap-3 rounded-xl border border-amber-200/80 bg-amber-50 p-4 mb-5">
+                    <ShieldAlert size={16} className="text-amber-700 shrink-0 mt-0.5" />
+                    <p className="text-[12px] leading-relaxed text-amber-900">
+                      <strong className="font-semibold">Before you submit.</strong> You confirm that the information provided
+                      is accurate and complete to the best of your knowledge. Submitting false reports is itself a
+                      disciplinary offense.
                     </p>
                   </div>
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="w-full bg-[#1D3A5F] hover:bg-[#162d4a] disabled:opacity-60 text-white rounded-xl py-3 text-sm font-medium transition-colors"
-                  >
+                  <PrimaryButton type="submit" disabled={submitting} className="w-full py-3">
+                    <Send size={15} />
                     {submitting ? 'Submitting…' : 'Submit Incident Report'}
-                  </button>
+                  </PrimaryButton>
                 </div>
               </form>
             </div>
@@ -303,43 +357,50 @@ export function LecturerDashboard({ user, onLogout, onUpdateProfile }: Props) {
           {selectedCase ? (
             <div className="flex-1 overflow-y-auto p-4 sm:p-8">
               <button
+                type="button"
                 onClick={() => setSelectedCase(null)}
-                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 mb-5 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--hairline)] bg-white px-3 py-2 mb-5
+                           text-[13px] font-medium text-ink-700 hover:bg-ink-50 hover:border-[var(--hairline-strong)]
+                           transition-all duration-[var(--dur)] ease-[var(--ease-out)]"
               >
-                ← Back to cases
+                <ArrowLeft size={14} /> Back to cases
               </button>
               <CaseDetailReadOnly c={selectedCase} />
             </div>
           ) : (
             <div className="flex-1 overflow-y-auto p-4 sm:p-8">
-              <div className="max-w-3xl mx-auto mb-4">
+              <div className="max-w-3xl mx-auto mb-5">
                 <SearchInput
                   value={caseSearch}
                   onChange={setCaseSearch}
                   placeholder="Search your cases by student, ID, case number or offense…"
                   resultCount={caseSearch ? paged.totalElements : undefined}
-                  className="bg-white border border-gray-200 rounded-xl px-3 py-2.5"
+                  className="card px-3.5 py-2.5"
                 />
               </div>
               {paged.loading && myCases.length === 0 ? (
-                <p className="text-center py-16 text-sm text-gray-400">Loading your cases…</p>
+                <p className="text-center py-16 text-[13px] text-ink-400">Loading your cases…</p>
               ) : paged.error ? (
-                <div className="max-w-3xl mx-auto flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-                  <AlertCircle size={15} className="shrink-0" />
-                  <p className="text-sm">{paged.error}</p>
+                <div className="max-w-3xl mx-auto flex items-center gap-2.5 text-rose-800 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
+                  <AlertCircle size={15} className="shrink-0 text-rose-600" />
+                  <p className="text-[13px]">{paged.error}</p>
                 </div>
               ) : myCases.length === 0 ? (
-                <div className="text-center py-16 text-gray-400">
-                  <FilePlus size={40} className="mx-auto mb-3 opacity-30" />
+                <div className="max-w-3xl mx-auto card px-6 py-14 text-center">
+                  <div className="w-12 h-12 rounded-full bg-ink-100 flex items-center justify-center mx-auto mb-4">
+                    {caseSearch
+                      ? <SearchX size={20} className="text-ink-400" />
+                      : <FilePlus size={20} className="text-ink-400" />}
+                  </div>
                   {caseSearch ? (
                     <>
-                      <p className="text-sm">No cases match "{caseSearch}".</p>
-                      <p className="text-xs mt-1">Try a student name, ID, case number or offense.</p>
+                      <p className="text-sm font-semibold text-ink-800">No cases match "{caseSearch}".</p>
+                      <p className="text-[13px] text-ink-500 mt-1">Try a student name, ID, case number or offense.</p>
                     </>
                   ) : (
                     <>
-                      <p className="text-sm">No cases reported yet.</p>
-                      <p className="text-xs mt-1">Use "Report New Incident" to submit a case.</p>
+                      <p className="text-sm font-semibold text-ink-800">No cases reported yet.</p>
+                      <p className="text-[13px] text-ink-500 mt-1">Use "Report New Incident" to submit a case.</p>
                     </>
                   )}
                 </div>
@@ -348,23 +409,32 @@ export function LecturerDashboard({ user, onLogout, onUpdateProfile }: Props) {
                   {myCases.map(c => (
                     <button
                       key={c.id}
+                      type="button"
                       onClick={() => setSelectedCase(c)}
-                      className="w-full bg-white border border-gray-200 rounded-2xl p-5 text-left hover:border-[#1D3A5F]/40 hover:shadow-sm transition-all group"
+                      className="card card-interactive w-full p-5 text-left group hover:border-brand-300"
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-3 mb-2">
-                            <span className="text-xs font-mono text-gray-400">{c.id}</span>
+                            <span className="text-[11px] font-mono tabular text-ink-400">{c.id}</span>
                             <StatusBadge status={c.status} />
                           </div>
-                          <p className="text-sm text-gray-900">{c.studentName} — <span className="text-gray-500">{c.offenseType}</span></p>
-                          <p className="text-xs text-gray-400 mt-1">Reported {c.reportDate}</p>
+                          <p className="text-sm text-ink-900">
+                            <span className="font-semibold">{c.studentName}</span>
+                            <span className="text-ink-400"> — </span>
+                            <span className="text-ink-600">{c.offenseType}</span>
+                          </p>
+                          <p className="text-[12px] font-tight text-ink-400 mt-1 tabular">Reported {c.reportDate}</p>
                         </div>
-                        <ChevronRight size={16} className="text-gray-400 group-hover:text-[#1D3A5F] transition-colors mt-1 shrink-0" />
+                        <ChevronRight
+                          size={16}
+                          className="text-ink-300 group-hover:text-brand-600 group-hover:translate-x-0.5
+                                     transition-all duration-[var(--dur)] ease-[var(--ease-out)] mt-1 shrink-0"
+                        />
                       </div>
                     </button>
                   ))}
-                  <div className="bg-white border border-gray-200 rounded-2xl">
+                  <div className="card overflow-hidden">
                     <Pagination
                       page={paged.page}
                       totalPages={paged.totalPages}
@@ -390,44 +460,60 @@ export function LecturerDashboard({ user, onLogout, onUpdateProfile }: Props) {
 
 function CaseDetailReadOnly({ c }: { c: DisciplinaryCase }) {
   return (
-    <div className="max-w-3xl mx-auto space-y-4">
-      <div className="bg-white rounded-2xl border border-gray-200 p-6">
-        <div className="flex items-start justify-between mb-5">
-          <div>
-            <p className="text-xs font-mono text-gray-400 mb-1">{c.id}</p>
-            <h2 className="text-lg text-gray-900">{c.studentName}</h2>
-            <p className="text-sm text-gray-500">Student ID: {c.studentId}</p>
+    <div className="max-w-3xl mx-auto space-y-4 rise">
+      <div className="card p-6">
+        <div className="flex items-start justify-between gap-4 mb-6">
+          <div className="min-w-0">
+            <p className="text-[11px] font-mono tabular text-ink-400 mb-1.5">{c.id}</p>
+            <h2 className="display-lg text-ink-900 truncate">{c.studentName}</h2>
+            <p className="text-[13px] text-ink-500 mt-0.5">
+              Student ID <span className="font-mono tabular text-ink-700">{c.studentId}</span>
+            </p>
           </div>
-          <StatusBadge status={c.status} />
+          <div className="shrink-0"><StatusBadge status={c.status} /></div>
         </div>
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div><span className="text-gray-500">Offense:</span> <span className="text-gray-900 ml-1">{c.offenseType}</span></div>
-          <div><span className="text-gray-500">Reported:</span> <span className="text-gray-900 ml-1">{c.reportDate}</span></div>
-          {c.decision && <div><span className="text-gray-500">Decision:</span> <span className="ml-1"><StatusBadge status={c.decision} /></span></div>}
-          <div><span className="text-gray-500">Registration:</span> <span className="ml-1"><StatusBadge status={c.registrationStatus} /></span></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 border-t border-[var(--hairline)] pt-5">
+          <div>
+            <p className="eyebrow mb-1.5">Offense</p>
+            <p className="text-sm text-ink-900">{c.offenseType}</p>
+          </div>
+          <div>
+            <p className="eyebrow mb-1.5">Reported</p>
+            <p className="text-sm text-ink-900 tabular">{c.reportDate}</p>
+          </div>
+          {c.decision && (
+            <div>
+              <p className="eyebrow mb-1.5">Decision</p>
+              <StatusBadge status={c.decision} />
+            </div>
+          )}
+          <div>
+            <p className="eyebrow mb-1.5">Registration</p>
+            <StatusBadge status={c.registrationStatus} />
+          </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-200 p-6">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Description</p>
-        <p className="text-sm text-gray-700 leading-relaxed">{c.description}</p>
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-4 mb-2">Evidence Submitted</p>
-        <p className="text-sm text-gray-700">{c.evidence}</p>
+      <div className="card p-6">
+        <p className="eyebrow mb-2">Description</p>
+        <p className="text-sm text-ink-700 leading-relaxed">{c.description}</p>
+        <p className="eyebrow mt-6 mb-2">Evidence Submitted</p>
+        <p className="text-sm text-ink-700 leading-relaxed">{c.evidence}</p>
         <EvidenceGallery files={c.evidenceFiles} />
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-200 p-6">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Case Timeline</p>
+      <div className="card p-6">
+        <p className="eyebrow mb-4">Case Timeline</p>
         <div className="space-y-3">
           {c.auditTrail.map((entry, i) => (
             <div key={i} className="flex gap-3">
               <div className="flex flex-col items-center">
-                <div className="w-2 h-2 rounded-full bg-[#1D3A5F] mt-1.5 shrink-0" />
-                {i < c.auditTrail.length - 1 && <div className="w-px flex-1 bg-gray-200 mt-1" />}
+                <div className="w-2 h-2 rounded-full bg-brand-600 ring-4 ring-brand-100 mt-1.5 shrink-0" />
+                {i < c.auditTrail.length - 1 && <div className="w-px flex-1 bg-[var(--hairline-strong)] mt-1.5" />}
               </div>
               <div className="pb-3 min-w-0">
-                <p className="text-sm text-gray-800">{entry.action}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{entry.by} · {entry.timestamp}</p>
+                <p className="text-sm text-ink-800">{entry.action}</p>
+                <p className="text-[12px] font-tight text-ink-400 mt-0.5 tabular">{entry.by} · {entry.timestamp}</p>
               </div>
             </div>
           ))}

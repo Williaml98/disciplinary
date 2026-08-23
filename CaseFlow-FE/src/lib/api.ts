@@ -417,10 +417,12 @@ export interface CaseQuery {
   decision?: DecisionType;
   reporterDepartment?: string;
   reportedByExact?: string;
+  reportedByUserId?: string;
   reportDateFrom?: string;
   reportDateTo?: string;
   suspensionEndFrom?: string;
   suspensionEndTo?: string;
+  suspensionEndMissing?: boolean;
   page?: number;
   size?: number;
   sort?: string;

@@ -1,9 +1,13 @@
 import { useRef, useState } from 'react';
-import { Eye, EyeOff, CheckCircle, AlertCircle, BookOpen, Users, GraduationCap, Settings, Camera, Trash2 } from 'lucide-react';
+import {
+  Eye, EyeOff, CheckCircle, AlertCircle, BookOpen, Users, GraduationCap, Settings, Camera, Trash2,
+  ArrowLeft, UserRound, KeyRound, ShieldCheck, Loader2, Hash, Building2,
+} from 'lucide-react';
 import type { AppUser } from './mockData';
 import { updateUserProfile, changePassword, uploadProfilePicture, removeProfilePicture } from '../../lib/api';
 import { Avatar } from './Avatar';
 import { DepartmentSelect } from './DepartmentSelect';
+import { PrimaryButton } from './DashboardLayout';
 import { notifyError, notifySuccess } from '../../lib/toast';
 
 interface Props {
@@ -26,12 +30,17 @@ const ROLE_ICONS = {
   admin: <Settings size={13} />,
 };
 
+// Tints match the StatusBadge treatment: soft fill, inset ring, no hard border.
 const ROLE_COLORS = {
-  lecturer: 'bg-blue-50 text-blue-700 border-blue-200',
-  committee: 'bg-slate-100 text-slate-700 border-slate-200',
-  student: 'bg-teal-50 text-teal-700 border-teal-200',
-  admin: 'bg-[#1D3A5F]/10 text-[#1D3A5F] border-[#1D3A5F]/20',
+  lecturer: 'bg-blue-50 text-blue-800 ring-blue-200/70',
+  committee: 'bg-ink-100 text-ink-700 ring-ink-200',
+  student: 'bg-teal-50 text-teal-800 ring-teal-200/70',
+  admin: 'bg-brand-50 text-brand-800 ring-brand-200',
 };
+
+const ROLE_CHIP = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-tight font-semibold ring-1 ring-inset';
+const META_CHIP = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-tight font-medium text-ink-600 bg-ink-50 ring-1 ring-inset ring-ink-200';
+const READONLY_ROW = 'flex items-center justify-between gap-3 rounded-xl border border-[var(--hairline)] bg-ink-50 px-3.5 py-2.5';
 
 export function ProfilePage({ user, onUpdate, onClose }: Props) {
   // Profile info state
@@ -140,84 +149,114 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50">
-      {/* Header bar */}
-      <div className="bg-white border-b border-gray-200 px-4 sm:px-8 py-4 flex items-center gap-4 shrink-0">
+    <div className="flex-1 overflow-y-auto bg-page">
+      {/* Header bar — matches PageHeader's chrome, with a back affordance ahead of the title. */}
+      <div className="bg-[var(--surface-card)]/85 backdrop-blur-xl border-b border-[var(--hairline)] px-4 sm:px-8 py-4 sm:py-5
+                      flex items-center gap-4 shrink-0 sticky top-0 z-20">
         <button
+          type="button"
           onClick={onClose}
-          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors"
+          aria-label="Back to dashboard"
+          className="inline-flex items-center gap-1.5 rounded-lg text-[13px] font-medium text-ink-500
+                     hover:text-brand-700 transition-colors duration-[var(--dur)] ease-[var(--ease-out)]"
         >
-          ← Back
+          <ArrowLeft size={15} />
+          Back
         </button>
-        <div className="h-4 w-px bg-gray-200" />
-        <h1 className="text-lg text-gray-900">My Profile</h1>
+        <div className="h-5 w-px bg-[var(--hairline-strong)]" />
+        <div className="min-w-0">
+          <h1 className="display-lg text-ink-900 truncate">My Profile</h1>
+          <p className="text-[13px] text-ink-500 mt-0.5 truncate">Your details, picture and password</p>
+        </div>
       </div>
 
-      <div className="p-4 sm:p-8 max-w-2xl mx-auto space-y-5">
-        {/* Avatar card */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-6">
-          <div className="flex items-center gap-5">
-            <div className="relative shrink-0">
-              <Avatar user={user} size={80} />
-              {/* This camera badge used to be decorative — no input, no handler. */}
-              <button
-                type="button"
-                onClick={() => pictureInputRef.current?.click()}
-                disabled={uploadingPicture}
-                aria-label="Change profile picture"
-                className="absolute -bottom-1 -right-1 w-7 h-7 bg-gray-100 border-2 border-white rounded-full flex items-center justify-center hover:bg-gray-200 disabled:opacity-60 transition-colors"
-              >
-                <Camera size={12} className="text-gray-600" />
-              </button>
-              <input
-                ref={pictureInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="hidden"
-                onChange={e => {
-                  const file = e.target.files?.[0];
-                  // Reset so re-picking the same file still fires a change event.
-                  e.target.value = '';
-                  if (file) handlePictureUpload(file);
-                }}
-              />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-xl text-gray-900 truncate">{user.name}</h2>
-              <p className="text-sm text-gray-500 truncate mt-0.5">{user.email}</p>
-              {uploadingPicture && <p className="text-xs text-gray-400 mt-1">Updating picture…</p>}
-              {user.profilePictureUrl && !uploadingPicture && (
+      <div className="p-4 sm:p-8 max-w-2xl mx-auto space-y-5 rise">
+        {/* Profile header card */}
+        <div className="card overflow-hidden">
+          <div className="h-20 bg-brand-50 border-b border-[var(--hairline)]" aria-hidden="true" />
+
+          <div className="px-6 pb-6">
+            <div className="-mt-10 flex flex-wrap items-end gap-x-5 gap-y-4">
+              <div className="relative shrink-0">
+                <Avatar user={user} size={80} className="ring-4 ring-white shadow-[var(--shadow-md)]" />
+                {/* This camera badge used to be decorative — no input, no handler. */}
                 <button
                   type="button"
-                  onClick={handlePictureRemove}
-                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-600 mt-1 transition-colors"
+                  onClick={() => pictureInputRef.current?.click()}
+                  disabled={uploadingPicture}
+                  aria-label="Change profile picture"
+                  className="absolute -bottom-0.5 -right-0.5 w-8 h-8 rounded-full bg-white text-ink-600
+                             ring-1 ring-[var(--hairline-strong)] shadow-[var(--shadow-sm)]
+                             flex items-center justify-center hover:bg-ink-50 hover:text-brand-700
+                             disabled:opacity-60 disabled:cursor-not-allowed
+                             transition-all duration-[var(--dur)] ease-[var(--ease-out)]"
                 >
-                  <Trash2 size={11} /> Remove picture
+                  <Camera size={13} />
                 </button>
-              )}
-              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border ${ROLE_COLORS[user.role]}`}>
-                  {ROLE_ICONS[user.role]}
-                  {ROLE_LABELS[user.role]}
-                </span>
-                {user.studentId && (
-                  <span className="text-xs text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
-                    ID: {user.studentId}
-                  </span>
+                <input
+                  ref={pictureInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0];
+                    // Reset so re-picking the same file still fires a change event.
+                    e.target.value = '';
+                    if (file) handlePictureUpload(file);
+                  }}
+                />
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <h2 className="display-lg text-ink-900 truncate">{user.name}</h2>
+                <p className="text-[13px] text-ink-500 truncate mt-0.5">{user.email}</p>
+                {uploadingPicture && (
+                  <p className="text-[11px] text-ink-400 mt-1.5 flex items-center gap-1.5">
+                    <Loader2 size={11} className="animate-spin" /> Updating picture…
+                  </p>
                 )}
-                {user.department && (
-                  <span className="text-xs text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
-                    {user.department}
-                  </span>
+                {user.profilePictureUrl && !uploadingPicture && (
+                  <button
+                    type="button"
+                    onClick={handlePictureRemove}
+                    className="inline-flex items-center gap-1.5 text-[11px] font-medium text-ink-400 mt-1.5
+                               hover:text-rose-600 transition-colors duration-[var(--dur)] ease-[var(--ease-out)]"
+                  >
+                    <Trash2 size={11} /> Remove picture
+                  </button>
                 )}
               </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap mt-5 pt-5 border-t border-[var(--hairline)]">
+              <span className={`${ROLE_CHIP} ${ROLE_COLORS[user.role]}`}>
+                {ROLE_ICONS[user.role]}
+                {ROLE_LABELS[user.role]}
+              </span>
+              {user.studentId && (
+                <span className={META_CHIP}>
+                  <Hash size={11} className="text-ink-400" />
+                  <span className="font-mono tabular">{user.studentId}</span>
+                </span>
+              )}
+              {user.department && (
+                <span className={META_CHIP}>
+                  <Building2 size={11} className="text-ink-400" />
+                  {user.department}
+                </span>
+              )}
             </div>
           </div>
         </div>
 
         {/* Personal information */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-6">
-          <h3 className="text-sm font-semibold text-gray-700 mb-5">Personal Information</h3>
+        <div className="card p-6">
+          <SectionHeading
+            icon={<UserRound size={16} />}
+            eyebrow="Account"
+            title="Personal Information"
+            subtitle="How your name appears on every case you touch."
+          />
 
           <form onSubmit={saveProfile} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -227,8 +266,6 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
                   value={name}
                   onChange={e => { setName(e.target.value); setProfileErrors(p => ({ ...p, name: '' })); }}
                   className={inputCls(!!profileErrors.name)}
-                  onFocus={focusStyle}
-                  onBlur={blurStyle}
                 />
               </ProfileField>
 
@@ -238,17 +275,15 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
                   value={email}
                   onChange={e => { setEmail(e.target.value); setProfileErrors(p => ({ ...p, email: '' })); }}
                   className={inputCls(!!profileErrors.email)}
-                  onFocus={focusStyle}
-                  onBlur={blurStyle}
                 />
               </ProfileField>
             </div>
 
             {isStudent && (
               <ProfileField label="Student ID">
-                <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl">
-                  <span className="text-sm text-gray-700">{user.studentId}</span>
-                  <span className="text-xs text-gray-400">Contact the Registrar to change this</span>
+                <div className={READONLY_ROW}>
+                  <span className="text-[13px] font-mono tabular text-ink-700">{user.studentId}</span>
+                  <span className="text-[11px] text-ink-400 text-right">Contact the Registrar to change this</span>
                 </div>
               </ProfileField>
             )}
@@ -260,36 +295,37 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
                 onChange={v => { setDepartment(v); setProfileErrors(p => ({ ...p, department: '' })); }}
                 placeholder={isStudent ? 'Select your programme…' : 'Select your department…'}
                 className={inputCls(!!profileErrors.department)}
-                onFocus={focusStyle}
-                onBlur={blurStyle}
               />
             </ProfileField>
 
             {/* Role — read-only */}
             <ProfileField label="Role">
-              <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl">
-                {ROLE_ICONS[user.role]}
-                <span className="text-sm text-gray-600">{ROLE_LABELS[user.role]}</span>
-                <span className="text-xs text-gray-400 ml-auto">Cannot be changed here</span>
+              <div className={READONLY_ROW}>
+                <span className="flex items-center gap-2 text-[13px] text-ink-700">
+                  <span className="text-ink-400">{ROLE_ICONS[user.role]}</span>
+                  {ROLE_LABELS[user.role]}
+                </span>
+                <span className="text-[11px] text-ink-400 text-right">Cannot be changed here</span>
               </div>
             </ProfileField>
 
-            <div className="pt-1">
-              <button
-                type="submit"
-                disabled={savingProfile}
-                className="text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
-                style={{ backgroundColor: '#1D3A5F' }}
-              >
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-[var(--hairline)]">
+              <p className="text-[11px] text-ink-400">Applies everywhere your name appears in CaseFlow.</p>
+              <PrimaryButton type="submit" disabled={savingProfile}>
                 {savingProfile ? 'Saving…' : 'Save Changes'}
-              </button>
+              </PrimaryButton>
             </div>
           </form>
         </div>
 
         {/* Change password */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-6">
-          <h3 className="text-sm font-semibold text-gray-700 mb-5">Change Password</h3>
+        <div className="card p-6">
+          <SectionHeading
+            icon={<KeyRound size={16} />}
+            eyebrow="Security"
+            title="Change Password"
+            subtitle="Use at least 8 characters, different from your current one."
+          />
 
           <form onSubmit={savePassword} className="space-y-4">
             <ProfileField label="Current Password" error={pwErrors.current}>
@@ -300,12 +336,8 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
                   onChange={e => { setCurrentPw(e.target.value); setPwErrors(p => ({ ...p, current: '' })); }}
                   placeholder="Enter current password"
                   className={inputCls(!!pwErrors.current) + ' pr-11'}
-                  onFocus={focusStyle}
-                  onBlur={blurStyle}
                 />
-                <button type="button" onClick={() => setShowCurrent(s => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                  {showCurrent ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
+                <RevealButton shown={showCurrent} onToggle={() => setShowCurrent(s => !s)} />
               </div>
             </ProfileField>
 
@@ -318,15 +350,13 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
                     onChange={e => { setNewPw(e.target.value); setPwErrors(p => ({ ...p, new: '' })); }}
                     placeholder="Minimum 8 characters"
                     className={inputCls(!!pwErrors.new) + ' pr-11'}
-                    onFocus={focusStyle}
-                    onBlur={blurStyle}
                   />
-                  <button type="button" onClick={() => setShowNew(s => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                    {showNew ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
+                  <RevealButton shown={showNew} onToggle={() => setShowNew(s => !s)} />
                 </div>
                 {newPw.length >= 8 && !pwErrors.new && (
-                  <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><CheckCircle size={11} /> Strong password</p>
+                  <p className="text-[11px] font-medium text-emerald-600 mt-1.5 flex items-center gap-1.5">
+                    <CheckCircle size={11} className="shrink-0" /> Strong password
+                  </p>
                 )}
               </ProfileField>
 
@@ -338,49 +368,73 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
                     onChange={e => { setConfirmPw(e.target.value); setPwErrors(p => ({ ...p, confirm: '' })); }}
                     placeholder="Re-enter new password"
                     className={inputCls(!!pwErrors.confirm) + ' pr-11'}
-                    onFocus={focusStyle}
-                    onBlur={blurStyle}
                   />
-                  <button type="button" onClick={() => setShowConfirm(s => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                    {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
+                  <RevealButton shown={showConfirm} onToggle={() => setShowConfirm(s => !s)} />
                 </div>
               </ProfileField>
             </div>
 
-            <div className="pt-1">
-              <button
-                type="submit"
-                disabled={savingPassword}
-                className="text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
-                style={{ backgroundColor: '#1D3A5F' }}
-              >
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-[var(--hairline)]">
+              <p className="text-[11px] text-ink-400">You'll stay signed in on this device.</p>
+              <PrimaryButton type="submit" disabled={savingPassword}>
                 {savingPassword ? 'Updating…' : 'Update Password'}
-              </button>
+              </PrimaryButton>
             </div>
           </form>
         </div>
 
         {/* Account info — read only */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-6">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">Account Details</h3>
-          <div className="space-y-3 text-sm">
-            <div className="flex justify-between py-2 border-b border-gray-100">
-              <span className="text-gray-500">Account ID</span>
-              <span className="font-mono text-gray-600 text-xs">{user.id}</span>
+        <div className="card p-6">
+          <SectionHeading
+            icon={<ShieldCheck size={16} />}
+            eyebrow="Reference"
+            title="Account Details"
+            subtitle="Quote these when contacting the Registrar."
+          />
+
+          <dl className="space-y-0">
+            <div className="flex items-center justify-between gap-3 py-2.5 border-b border-[var(--hairline)]">
+              <dt className="text-[13px] text-ink-500">Account ID</dt>
+              <dd className="font-mono tabular text-[12px] text-ink-700">{user.id}</dd>
             </div>
-            <div className="flex justify-between py-2 border-b border-gray-100">
-              <span className="text-gray-500">Role</span>
-              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs border ${ROLE_COLORS[user.role]}`}>
-                {ROLE_ICONS[user.role]} {ROLE_LABELS[user.role]}
-              </span>
+            <div className="flex items-center justify-between gap-3 py-2.5 border-b border-[var(--hairline)]">
+              <dt className="text-[13px] text-ink-500">Role</dt>
+              <dd>
+                <span className={`${ROLE_CHIP} ${ROLE_COLORS[user.role]}`}>
+                  {ROLE_ICONS[user.role]} {ROLE_LABELS[user.role]}
+                </span>
+              </dd>
             </div>
-            <div className="flex justify-between py-2">
-              <span className="text-gray-500">System</span>
-              <span className="text-gray-600">CaseFlow — AUCA</span>
+            <div className="flex items-center justify-between gap-3 py-2.5">
+              <dt className="text-[13px] text-ink-500">System</dt>
+              <dd className="text-[13px] text-ink-700">CaseFlow — AUCA</dd>
             </div>
-          </div>
+          </dl>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function SectionHeading({ icon, eyebrow, title, subtitle }: {
+  icon: React.ReactNode;
+  eyebrow: string;
+  title: string;
+  subtitle?: string;
+}) {
+  return (
+    <div className="flex items-start gap-3 mb-5">
+      <span
+        aria-hidden="true"
+        className="w-9 h-9 rounded-xl bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-100
+                   flex items-center justify-center shrink-0"
+      >
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <p className="eyebrow">{eyebrow}</p>
+        <h3 className="display-md text-ink-900 mt-0.5">{title}</h3>
+        {subtitle && <p className="text-[12px] text-ink-500 mt-1">{subtitle}</p>}
       </div>
     </div>
   );
@@ -389,10 +443,10 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
 function ProfileField({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-sm text-gray-700 mb-1.5">{label}</label>
+      <label className="block text-[13px] font-medium text-ink-700 mb-1.5">{label}</label>
       {children}
       {error && (
-        <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+        <p className="text-[11px] font-medium text-rose-600 mt-1.5 flex items-center gap-1.5">
           <AlertCircle size={11} className="shrink-0" /> {error}
         </p>
       )}
@@ -400,16 +454,25 @@ function ProfileField({ label, error, children }: { label: string; error?: strin
   );
 }
 
+function RevealButton({ shown, onToggle }: { shown: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={shown ? 'Hide password' : 'Show password'}
+      className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-0.5 text-ink-400 hover:text-brand-700
+                 transition-colors duration-[var(--dur)] ease-[var(--ease-out)]"
+    >
+      {shown ? <EyeOff size={16} /> : <Eye size={16} />}
+    </button>
+  );
+}
+
 function inputCls(hasError: boolean) {
-  return `w-full border ${hasError ? 'border-red-400 bg-red-50' : 'border-gray-300'} rounded-xl px-4 py-2.5 text-sm focus:outline-none transition-colors`;
-}
-
-function focusStyle(e: React.FocusEvent<HTMLElement>) {
-  e.currentTarget.style.boxShadow = '0 0 0 2px #1D3A5F40';
-  e.currentTarget.style.borderColor = '#1D3A5F';
-}
-
-function blurStyle(e: React.FocusEvent<HTMLElement>) {
-  e.currentTarget.style.boxShadow = '';
-  e.currentTarget.style.borderColor = '';
+  return `w-full rounded-xl border px-3.5 py-2.5 text-[13px] text-ink-800 placeholder-ink-400 outline-none
+          transition-all duration-[var(--dur)] ease-[var(--ease-out)]
+          focus:border-brand-400 focus:shadow-[var(--shadow-focus)]
+          ${hasError
+            ? 'border-rose-300 bg-rose-50/50'
+            : 'border-[var(--hairline)] bg-white hover:border-[var(--hairline-strong)]'}`;
 }

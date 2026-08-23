@@ -1,7 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-const NAVY = '#1D3A5F';
-
 interface Props {
   page: number;
   totalPages: number;
@@ -28,15 +26,15 @@ export function Pagination({
 
   if (totalPages <= 1) {
     return (
-      <div className="px-6 py-3 text-xs text-gray-500 border-t border-gray-100">
+      <div className="px-6 py-3 text-[11px] font-tight font-medium text-ink-400 border-t border-[var(--hairline)] tabular">
         {totalElements} {noun}
       </div>
     );
   }
 
   return (
-    <div className="flex items-center justify-between gap-3 px-6 py-3 border-t border-gray-100">
-      <p className="text-xs text-gray-500">
+    <div className="flex items-center justify-between gap-3 px-6 py-3 border-t border-[var(--hairline)]">
+      <p className="text-[11px] font-tight font-medium text-ink-400 tabular">
         Page {page + 1} of {totalPages} · {totalElements} {noun}
       </p>
       <div className="flex items-center gap-1">
@@ -44,7 +42,10 @@ export function Pagination({
           onClick={() => onPageChange(page - 1)}
           disabled={first}
           aria-label="Previous page"
-          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+          className="flex items-center gap-1 pl-1.5 pr-2.5 py-1.5 rounded-lg text-[12px] font-medium border border-[var(--hairline)] text-ink-600 bg-white
+                     hover:bg-ink-50 hover:border-[var(--hairline-strong)] hover:text-ink-900
+                     disabled:opacity-35 disabled:hover:bg-white disabled:hover:text-ink-600 disabled:cursor-not-allowed
+                     transition-all duration-[var(--dur)] ease-[var(--ease-out)]"
         >
           <ChevronLeft size={13} /> Previous
         </button>
@@ -52,7 +53,10 @@ export function Pagination({
           onClick={() => onPageChange(page + 1)}
           disabled={last}
           aria-label="Next page"
-          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+          className="flex items-center gap-1 pl-2.5 pr-1.5 py-1.5 rounded-lg text-[12px] font-medium border border-[var(--hairline)] text-ink-600 bg-white
+                     hover:bg-ink-50 hover:border-[var(--hairline-strong)] hover:text-ink-900
+                     disabled:opacity-35 disabled:hover:bg-white disabled:hover:text-ink-600 disabled:cursor-not-allowed
+                     transition-all duration-[var(--dur)] ease-[var(--ease-out)]"
         >
           Next <ChevronRight size={13} />
         </button>
@@ -70,15 +74,15 @@ export function LoadMore({ loaded, total, loading, onLoadMore }: {
 }) {
   if (loaded >= total) {
     return total === 0 ? null : (
-      <p className="px-4 py-3 text-center text-xs text-gray-400">All {total} shown</p>
+      <p className="px-4 py-3 text-center text-[11px] font-tight text-ink-400">All {total} shown</p>
     );
   }
   return (
     <button
       onClick={onLoadMore}
       disabled={loading}
-      className="w-full px-4 py-3 text-xs font-medium hover:bg-gray-50 disabled:opacity-60 transition-colors"
-      style={{ color: NAVY }}
+      className="w-full px-4 py-3 text-[12px] font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-50
+                 transition-colors duration-[var(--dur)] ease-[var(--ease-out)] border-t border-[var(--hairline)]"
     >
       {loading ? 'Loading…' : `Load more (${loaded} of ${total})`}
     </button>
