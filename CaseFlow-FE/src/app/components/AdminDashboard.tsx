@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { LayoutDashboard, AlertTriangle, List, Clock, Search, ChevronRight, Bell, UserCog, Plus, AlertCircle, BookOpen, Users, GraduationCap, Settings, Pencil, Ban, RotateCcw, Mail, X, Scale, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, AlertTriangle, List, Clock, ChevronRight, Bell, UserCog, Plus, AlertCircle, BookOpen, Users, GraduationCap, Settings, Pencil, Ban, RotateCcw, Mail, X, Scale, BarChart3 } from 'lucide-react';
 import { DashboardLayout, PageHeader, StatusBadge, EvidenceGallery } from './DashboardLayout';
 import { DisciplinaryRulesPage } from './DisciplinaryRulesPage';
 import { ReportsPage } from './ReportsPage';
@@ -14,6 +14,7 @@ import { useCaseStats, useDebouncedValue, useMonthlyCaseCounts, useUserStats } f
 import { Pagination } from './Pagination';
 import { Avatar } from './Avatar';
 import { StatusChanger } from './StatusChanger';
+import { SearchInput } from './SearchInput';
 import { DepartmentSelect } from './DepartmentSelect';
 import type { AuditFeedEntry, CaseStatus, UserImpact } from './mockData';
 import { notifyError, notifySuccess, toMessage } from '../../lib/toast';
@@ -225,12 +226,13 @@ export function AdminDashboard({ user, onLogout, onUpdateProfile }: Props) {
           ) : (
             <div className="flex-1 overflow-hidden flex flex-col">
               <div className="bg-white border-b border-gray-200 px-4 sm:px-8 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                <div className="flex items-center gap-2 flex-1">
-                  <Search size={14} className="text-gray-400 shrink-0" />
-                  <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                    placeholder="Search by name, ID, or case number..."
-                    className="flex-1 text-sm border-0 outline-none text-gray-700 placeholder-gray-400 min-w-0" />
-                </div>
+                <SearchInput
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  placeholder="Search by student, ID, case number or offense…"
+                  resultCount={searchQuery ? pagedCases.totalElements : undefined}
+                  className="flex-1"
+                />
                 <div className="flex gap-1.5 flex-wrap">
                   {['All', 'Reported', 'Under Review', 'Decided', 'Under Appeal', 'Resolved'].map(s => (
                     <button key={s} onClick={() => setStatusFilter(s)}
@@ -447,12 +449,13 @@ function UserManagement({ currentAdmin }: { currentAdmin: AppUser }) {
       <div className="flex-1 overflow-hidden flex flex-col">
         {/* Filters */}
         <div className="bg-white border-b border-gray-200 px-4 sm:px-8 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="flex items-center gap-2 flex-1">
-            <Search size={14} className="text-gray-400 shrink-0" />
-            <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search by name or email…"
-              className="flex-1 text-sm border-0 outline-none text-gray-700 placeholder-gray-400 min-w-0" />
-          </div>
+          <SearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Search by name or email…"
+            resultCount={searchQuery ? pageMeta.totalElements : undefined}
+            className="flex-1"
+          />
           <div className="flex gap-1.5 flex-wrap">
             {(['all', 'admin', 'committee', 'lecturer', 'student'] as const).map(r => (
               <button key={r} onClick={() => setRoleFilter(r)}
@@ -1127,6 +1130,8 @@ function blurStyleSelect(e: React.FocusEvent<HTMLSelectElement>) {
  */
 function AuditLog() {
   const [kind, setKind] = useState<'ALL' | 'CASE' | 'USER'>('ALL');
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [page, setPage] = useState(0);
   const [feed, setFeed] = useState<AuditFeedEntry[]>([]);
   const [totalPages, setTotalPages] = useState(0);
@@ -1140,7 +1145,12 @@ function AuditLog() {
     let active = true;
     setLoading(true);
     setError('');
-    fetchAuditFeed({ kind: kind === 'ALL' ? undefined : kind, page, size: 50 })
+    fetchAuditFeed({
+      kind: kind === 'ALL' ? undefined : kind,
+      search: debouncedSearch || undefined,
+      page,
+      size: 50,
+    })
       .then(result => {
         if (!active) return;
         setFeed(result.content);
@@ -1152,7 +1162,10 @@ function AuditLog() {
       .catch(err => active && setError(toMessage(err, 'Unable to load the audit log.')))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
-  }, [kind, page]);
+  }, [kind, debouncedSearch, page]);
+
+  // Narrowing while on a later page would otherwise land on one that no longer exists.
+  useEffect(() => { setPage(0); }, [debouncedSearch]);
 
   const filters: { id: 'ALL' | 'CASE' | 'USER'; label: string }[] = [
     { id: 'ALL', label: 'Everything' },
@@ -1168,6 +1181,16 @@ function AuditLog() {
       />
       <div className="flex-1 overflow-y-auto p-4 sm:p-8">
         <div className="max-w-3xl mx-auto">
+          <div className="mb-4">
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Search the audit log by action, user, or case reference…"
+              resultCount={search ? totalElements : undefined}
+              className="bg-white border border-gray-200 rounded-xl px-3 py-2.5"
+            />
+          </div>
+
           <div className="flex gap-1.5 mb-4">
             {filters.map(f => (
               <button
@@ -1189,7 +1212,9 @@ function AuditLog() {
             ) : error ? (
               <p className="px-6 py-12 text-center text-sm text-red-600">{error}</p>
             ) : feed.length === 0 ? (
-              <p className="px-6 py-12 text-center text-sm text-gray-400">Nothing recorded yet.</p>
+              <p className="px-6 py-12 text-center text-sm text-gray-400">
+                {search ? `No audit entries match "${search}".` : 'Nothing recorded yet.'}
+              </p>
             ) : (
               <div className="divide-y divide-gray-100">
                 {feed.map(entry => (
@@ -1231,6 +1256,7 @@ function AuditLog() {
               last={last}
               onPageChange={setPage}
               label="entry"
+              labelPlural="entries"
             />
           </div>
         </div>

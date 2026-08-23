@@ -1,5 +1,6 @@
 package rw.ac.auca.caseflow.web;
 
+import java.util.Locale;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -36,6 +37,7 @@ public class AuditController {
     @PreAuthorize("hasRole('ADMIN')")
     public PageResponse<AuditFeedEntry> feed(
             @RequestParam(required = false) String kind,
+            @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         if (kind != null && !kind.isBlank() && !kind.equals("CASE") && !kind.equals("USER")) {
@@ -44,7 +46,27 @@ public class AuditController {
         // Sortless on purpose — the union's ordering is fixed in the query. See AuditFeedRepository.
         Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE));
         return PageResponse.of(
-                auditFeedRepository.findFeed(kind == null || kind.isBlank() ? null : kind, pageable),
+                auditFeedRepository.findFeed(
+                        kind == null || kind.isBlank() ? null : kind,
+                        likePattern(search),
+                        pageable),
                 AuditFeedEntry::from);
+    }
+
+    /**
+     * Lower-cased and wrapped for a LIKE. An absent search becomes a bare {@code "%"} rather than null:
+     * Postgres cannot infer a type for a null bind used only inside LIKE and fails the whole query, so
+     * the "no filter" case is expressed as a pattern that matches everything.
+     *
+     * <p>% and _ in a real search are escaped (against the '!' in the query's ESCAPE clauses) so they
+     * match literally instead of behaving as wildcards.
+     */
+    private static String likePattern(String search) {
+        if (search == null || search.isBlank()) {
+            return "%";
+        }
+        String escaped = search.toLowerCase(Locale.ROOT)
+                .replace("!", "!!").replace("%", "!%").replace("_", "!_");
+        return "%" + escaped + "%";
     }
 }

@@ -12,8 +12,9 @@ import {
   fetchCasesPage,
 } from '../../lib/api';
 import { usePagedCases } from '../../lib/usePagedCases';
-import { useCaseStats } from '../../lib/hooks';
+import { useCaseStats, useDebouncedValue } from '../../lib/hooks';
 import { LoadMore } from './Pagination';
+import { SearchInput } from './SearchInput';
 import { StatusChanger } from './StatusChanger';
 import { notifyError, notifySuccess } from '../../lib/toast';
 
@@ -38,11 +39,16 @@ export function CommitteeDashboard({ user, onLogout, onUpdateProfile }: Props) {
   const [busy, setBusy] = useState(false);
   const [searching, setSearching] = useState(false);
 
-  // The list follows whichever tab is open, filtered server-side.
-  const listFilters: { status?: CaseStatus[] } =
-    activeNav === 'queue' ? { status: ['Reported', 'Under Review'] }
-    : activeNav === 'appeals' ? { status: ['Under Appeal'] }
-    : {};
+  const [listSearch, setListSearch] = useState('');
+  const debouncedListSearch = useDebouncedValue(listSearch, 300);
+
+  // The list follows whichever tab is open, filtered server-side, narrowed further by the search box.
+  const listFilters: { status?: CaseStatus[]; search?: string } = {
+    ...(activeNav === 'queue' ? { status: ['Reported', 'Under Review'] as CaseStatus[] }
+      : activeNav === 'appeals' ? { status: ['Under Appeal'] as CaseStatus[] }
+      : {}),
+    search: debouncedListSearch || undefined,
+  };
   // Append mode: this is a 288px-wide triage column, where numbered page controls don't fit and a
   // scroll-and-load list matches how it's actually worked through.
   const paged = usePagedCases(listFilters, { size: 25, mode: 'append', sort: 'reportDate,desc' });
@@ -171,10 +177,16 @@ export function CommitteeDashboard({ user, onLogout, onUpdateProfile }: Props) {
         <div className="flex flex-1 overflow-hidden">
           {/* Cases list panel — hidden on mobile when a case is open */}
           <div className={`${selectedCase ? 'hidden lg:flex' : 'flex'} w-full lg:w-72 border-r border-gray-200 bg-white flex-col shrink-0`}>
-            <div className="p-4 border-b border-gray-100">
+            <div className="p-4 border-b border-gray-100 space-y-3">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 {activeNav === 'queue' ? 'Pending Review' : activeNav === 'appeals' ? 'Under Appeal' : 'All Cases'}
               </p>
+              <SearchInput
+                value={listSearch}
+                onChange={setListSearch}
+                placeholder="Search cases…"
+                className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2"
+              />
             </div>
             <div className="flex-1 overflow-y-auto">
               {paged.items.map(c => (
@@ -201,7 +213,9 @@ export function CommitteeDashboard({ user, onLogout, onUpdateProfile }: Props) {
                 <div className="p-8 text-center text-red-600 text-sm">{paged.error}</div>
               )}
               {!paged.loading && !paged.error && paged.items.length === 0 && (
-                <div className="p-8 text-center text-gray-400 text-sm">No cases in this view.</div>
+                <div className="p-8 text-center text-gray-400 text-sm">
+                  {listSearch ? `No cases match "${listSearch}".` : 'No cases in this view.'}
+                </div>
               )}
               <LoadMore
                 loaded={paged.items.length}

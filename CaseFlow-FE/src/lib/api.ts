@@ -449,8 +449,9 @@ export async function fetchMonthlyCaseCounts(): Promise<MonthlyCaseCount[]> {
   return request<MonthlyCaseCount[]>('/cases/stats/monthly');
 }
 
-export async function fetchAuditFeed(query: { kind?: 'CASE' | 'USER'; page?: number; size?: number } = {}):
-    Promise<Page<AuditFeedEntry>> {
+export async function fetchAuditFeed(
+  query: { kind?: 'CASE' | 'USER'; search?: string; page?: number; size?: number } = {},
+): Promise<Page<AuditFeedEntry>> {
   return mapPage(await request<Page<AuditFeedEntryDto>>(`/audit?${toQuery({ ...query })}`), mapAuditFeedEntry);
 }
 

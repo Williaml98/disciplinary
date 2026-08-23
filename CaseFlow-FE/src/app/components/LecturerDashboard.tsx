@@ -7,7 +7,9 @@ import { OFFENSE_TYPES } from './offenseTypes';
 import type { AppUser, DisciplinaryCase } from './mockData';
 import { reportCase, uploadEvidence } from '../../lib/api';
 import { usePagedCases } from '../../lib/usePagedCases';
+import { useDebouncedValue } from '../../lib/hooks';
 import { Pagination } from './Pagination';
+import { SearchInput } from './SearchInput';
 import { notifyError, notifySuccess, toMessage, toast } from '../../lib/toast';
 
 /** A file staged for upload, paired with the blob URL used to preview it. */
@@ -45,10 +47,20 @@ export function LecturerDashboard({ user, onLogout, onUpdateProfile }: Props) {
   const [selectedCase, setSelectedCase] = useState<DisciplinaryCase | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [caseSearch, setCaseSearch] = useState('');
+  const debouncedCaseSearch = useDebouncedValue(caseSearch, 300);
+
   // reportedByExact, not the report endpoint's substring match: "Marie Uwase" must not be shown the
-  // cases filed by "Dr. Marie Uwase".
-  const paged = usePagedCases({ reportedByExact: user.name }, { size: 20, sort: 'reportDate,desc' });
+  // cases filed by "Dr. Marie Uwase". Search narrows within that, server-side.
+  const paged = usePagedCases(
+    { reportedByExact: user.name, search: debouncedCaseSearch || undefined },
+    { size: 20, sort: 'reportDate,desc' },
+  );
   const myCases = paged.items;
+
+  // Deliberately unfiltered. The nav badge answers "how many cases have I filed", so it must not move
+  // when the search box narrows the list — size 1 because only the count is used.
+  const myCaseTotal = usePagedCases({ reportedByExact: user.name }, { size: 1 });
 
   // Revoke whatever is still outstanding when the component goes away. Individual URLs are revoked
   // as their file is removed; this only catches the ones still on screen at unmount.
@@ -127,8 +139,8 @@ export function LecturerDashboard({ user, onLogout, onUpdateProfile }: Props) {
     }
   }
 
-  // Global count from the server, so the badge stays right regardless of which page is loaded.
-  const myCaseBadge = paged.totalElements;
+  // Global count from the server, so the badge stays right regardless of paging or searching.
+  const myCaseBadge = myCaseTotal.totalElements;
 
   return (
     <DashboardLayout
@@ -284,7 +296,9 @@ export function LecturerDashboard({ user, onLogout, onUpdateProfile }: Props) {
         <>
           <PageHeader
             title="My Reported Cases"
-            subtitle={`${paged.totalElements} case${paged.totalElements !== 1 ? 's' : ''} submitted by you`}
+            subtitle={caseSearch
+              ? `${paged.totalElements} of ${myCaseBadge} case${myCaseBadge !== 1 ? 's' : ''} match your search`
+              : `${myCaseBadge} case${myCaseBadge !== 1 ? 's' : ''} submitted by you`}
           />
           {selectedCase ? (
             <div className="flex-1 overflow-y-auto p-4 sm:p-8">
@@ -298,6 +312,15 @@ export function LecturerDashboard({ user, onLogout, onUpdateProfile }: Props) {
             </div>
           ) : (
             <div className="flex-1 overflow-y-auto p-4 sm:p-8">
+              <div className="max-w-3xl mx-auto mb-4">
+                <SearchInput
+                  value={caseSearch}
+                  onChange={setCaseSearch}
+                  placeholder="Search your cases by student, ID, case number or offense…"
+                  resultCount={caseSearch ? paged.totalElements : undefined}
+                  className="bg-white border border-gray-200 rounded-xl px-3 py-2.5"
+                />
+              </div>
               {paged.loading && myCases.length === 0 ? (
                 <p className="text-center py-16 text-sm text-gray-400">Loading your cases…</p>
               ) : paged.error ? (
@@ -308,8 +331,17 @@ export function LecturerDashboard({ user, onLogout, onUpdateProfile }: Props) {
               ) : myCases.length === 0 ? (
                 <div className="text-center py-16 text-gray-400">
                   <FilePlus size={40} className="mx-auto mb-3 opacity-30" />
-                  <p className="text-sm">No cases reported yet.</p>
-                  <p className="text-xs mt-1">Use "Report New Incident" to submit a case.</p>
+                  {caseSearch ? (
+                    <>
+                      <p className="text-sm">No cases match "{caseSearch}".</p>
+                      <p className="text-xs mt-1">Try a student name, ID, case number or offense.</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm">No cases reported yet.</p>
+                      <p className="text-xs mt-1">Use "Report New Incident" to submit a case.</p>
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="max-w-3xl mx-auto space-y-3">

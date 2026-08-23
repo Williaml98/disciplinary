@@ -29,6 +29,12 @@ public interface AuditFeedRepository extends Repository<AuditEntry, Long> {
      *
      * <p>{@code a.by} is left unquoted deliberately: BY is non-reserved in both Postgres and H2, and
      * quoting it would break on H2, which folds unquoted identifiers to uppercase.
+     *
+     * <p>{@code search} is never null — an absent filter arrives as {@code "%"}, which matches every
+     * row. An earlier version branched on {@code :search is null}, which H2 accepted but Postgres
+     * rejected outright ("could not determine data type of parameter"), because a null bind used only
+     * inside LIKE gives the planner no type to infer. Passing a real pattern sidesteps the question.
+     * The nullable columns are coalesced because {@code NULL like '%'} is NULL, not true.
      */
     @Query(value = """
             select * from (
@@ -43,14 +49,26 @@ public interface AuditFeedRepository extends Repository<AuditEntry, Long> {
               from user_audit_entry u
             ) feed
             where (:kind is null or feed.kind = :kind)
+              and (lower(feed.action) like :search escape '!'
+                   or lower(feed.actor) like :search escape '!'
+                   or lower(coalesce(feed.case_id, '')) like :search escape '!'
+                   or lower(coalesce(feed.target_user_name, '')) like :search escape '!')
             order by feed.ts desc, feed.kind desc, feed.entry_id desc
             """,
             countQuery = """
-            select (select count(*) from audit_entry where (:kind is null or 'CASE' = :kind))
-                 + (select count(*) from user_audit_entry where (:kind is null or 'USER' = :kind))
+            select (select count(*) from audit_entry a
+                    where (:kind is null or 'CASE' = :kind)
+                      and (lower(a.action) like :search escape '!'
+                           or lower(a.by) like :search escape '!'
+                           or lower(coalesce(a.case_id, '')) like :search escape '!'))
+                 + (select count(*) from user_audit_entry u
+                    where (:kind is null or 'USER' = :kind)
+                      and (lower(u.action) like :search escape '!'
+                           or lower(u.actor) like :search escape '!'
+                           or lower(coalesce(u.target_user_name, '')) like :search escape '!'))
             """,
             nativeQuery = true)
-    Page<AuditFeedRow> findFeed(@Param("kind") String kind, Pageable pageable);
+    Page<AuditFeedRow> findFeed(@Param("kind") String kind, @Param("search") String search, Pageable pageable);
 
     interface AuditFeedRow {
         String getKind();

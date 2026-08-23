@@ -338,6 +338,50 @@ class CaseWorkflowTest extends AbstractApiTest {
                 .andExpect(jsonPath("$.content[0].targetUserName").value("Audit Target"));
     }
 
+    /** Search runs inside the UNION, so it has to hold for both arms and for the count query. */
+    @Test
+    void auditFeed_searchesBothCaseAndUserEntries() throws Exception {
+        AppUser admin = createUser("Admin Search", "adminsearch@auca.ac.rw", Role.ADMIN, null);
+        AppUser target = createUser("Searchable Target", "searchtarget@auca.ac.rw", Role.LECTURER, null);
+
+        reportCaseAndReturnId(admin, "50030");
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .patch("/api/users/" + target.getId() + "/role")
+                        .header("Authorization", authHeader(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("role", "committee"))))
+                .andExpect(status().isOk());
+
+        // Matches a user entry by the target's name.
+        mockMvc.perform(get("/api/audit").header("Authorization", authHeader(admin))
+                        .param("search", "searchable"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].kind").value("USER"));
+
+        // Matches case entries by action text.
+        mockMvc.perform(get("/api/audit").header("Authorization", authHeader(admin))
+                        .param("search", "incident reported"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].kind").value("CASE"));
+
+        mockMvc.perform(get("/api/audit").header("Authorization", authHeader(admin))
+                        .param("search", "nothingmatchesthis"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0));
+    }
+
+    /** A bare % must match literally, not act as a wildcard returning the whole feed. */
+    @Test
+    void auditFeed_treatsWildcardCharactersLiterally() throws Exception {
+        AppUser admin = createUser("Admin Wildcard", "adminwild@auca.ac.rw", Role.ADMIN, null);
+        reportCaseAndReturnId(admin, "50031");
+
+        mockMvc.perform(get("/api/audit").header("Authorization", authHeader(admin)).param("search", "%"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0));
+    }
+
     @Test
     void auditFeed_isAdminOnly() throws Exception {
         AppUser committee = createUser("Committee Audit", "commaudit@auca.ac.rw", Role.COMMITTEE, null);

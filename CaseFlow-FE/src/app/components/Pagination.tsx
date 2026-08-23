@@ -9,8 +9,10 @@ interface Props {
   first: boolean;
   last: boolean;
   onPageChange: (page: number) => void;
-  /** Noun for the summary line, e.g. "case" / "account". Pluralised with a trailing "s". */
+  /** Singular noun for the summary line, e.g. "case" / "account". */
   label?: string;
+  /** Plural form, when adding "s" is wrong ("entry" -> "entries"). */
+  labelPlural?: string;
 }
 
 /**
@@ -19,11 +21,15 @@ interface Props {
  * `page` is 0-based on the wire (matching Spring and array indexing) and displayed 1-based, so the
  * conversion happens here in one place rather than at each call site.
  */
-export function Pagination({ page, totalPages, totalElements, first, last, onPageChange, label = 'item' }: Props) {
+export function Pagination({
+  page, totalPages, totalElements, first, last, onPageChange, label = 'item', labelPlural,
+}: Props) {
+  const noun = totalElements === 1 ? label : (labelPlural ?? `${label}s`);
+
   if (totalPages <= 1) {
     return (
       <div className="px-6 py-3 text-xs text-gray-500 border-t border-gray-100">
-        {totalElements} {label}{totalElements === 1 ? '' : 's'}
+        {totalElements} {noun}
       </div>
     );
   }
@@ -31,7 +37,7 @@ export function Pagination({ page, totalPages, totalElements, first, last, onPag
   return (
     <div className="flex items-center justify-between gap-3 px-6 py-3 border-t border-gray-100">
       <p className="text-xs text-gray-500">
-        Page {page + 1} of {totalPages} · {totalElements} {label}{totalElements === 1 ? '' : 's'}
+        Page {page + 1} of {totalPages} · {totalElements} {noun}
       </p>
       <div className="flex items-center gap-1">
         <button
