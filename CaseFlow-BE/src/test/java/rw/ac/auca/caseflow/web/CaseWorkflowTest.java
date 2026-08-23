@@ -306,6 +306,70 @@ class CaseWorkflowTest extends AbstractApiTest {
                 .andExpect(jsonPath("$.last").value(false));
     }
 
+    // ---- reporter identity survives a rename ----
+
+    /**
+     * Regression: cases were matched to their author by display-name string, so renaming a lecturer
+     * orphaned every case they had filed. The case now carries the reporter's account id.
+     */
+    @Test
+    void renamingALecturer_keepsTheirCases() throws Exception {
+        AppUser lecturer = createUser("Dr. Original Name", "renamed@auca.ac.rw", Role.LECTURER, null);
+        String caseId = reportCaseAndReturnId(lecturer, "50040");
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .patch("/api/users/" + lecturer.getId())
+                        .header("Authorization", authHeader(lecturer))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "name", "Dr. Completely Different", "email", "renamed@auca.ac.rw"))))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/cases").header("Authorization", authHeader(lecturer))
+                        .param("reportedByUserId", String.valueOf(lecturer.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(caseId));
+    }
+
+    /** Cases predating the id column are still found by name, so nothing disappears on upgrade. */
+    @Test
+    void casesWithoutAReporterId_areStillFoundByName() throws Exception {
+        AppUser lecturer = createUser("Dr. Legacy", "legacy@auca.ac.rw", Role.LECTURER, null);
+        DisciplinaryCase legacy = createCase("CF-WF-020", "50041", CaseStatus.REPORTED);
+        legacy.setReportedByUserId(null);
+        caseRepository.save(legacy);
+
+        mockMvc.perform(get("/api/cases").header("Authorization", authHeader(lecturer))
+                        .param("reportedByUserId", String.valueOf(lecturer.getId()))
+                        .param("reportedByExact", "Dr. Reporter"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    // ---- expulsions are visible to the registrar ----
+
+    /**
+     * Regression: an expulsion is RESTRICTED with no suspensionEnd, so it matched neither the active
+     * nor the expired bucket and vanished from the registrar-alert total — the one group that total
+     * most needs to catch.
+     */
+    @Test
+    void expulsions_countTowardsRegistrationHolds() throws Exception {
+        DisciplinaryCase expelled = createCase("CF-WF-021", "50042", CaseStatus.DECIDED);
+        // createCase leaves suspensionEnd null, which is exactly the expulsion shape.
+        expelled.setRegistrationStatus(RegistrationStatus.RESTRICTED);
+        caseRepository.save(expelled);
+        AppUser admin = createUser("Admin Expel", "adminexpel@auca.ac.rw", Role.ADMIN, null);
+
+        mockMvc.perform(get("/api/cases/stats").header("Authorization", authHeader(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activeSuspensions").value(0))
+                .andExpect(jsonPath("$.expiredSuspensions").value(0))
+                .andExpect(jsonPath("$.indefiniteRestrictions").value(1))
+                .andExpect(jsonPath("$.registrationHolds").value(1));
+    }
+
     // ---- merged audit feed ----
 
     /**

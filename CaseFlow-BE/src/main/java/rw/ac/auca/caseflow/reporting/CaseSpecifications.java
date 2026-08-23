@@ -84,14 +84,37 @@ public final class CaseSpecifications {
     }
 
     /**
-     * Exact match, unlike {@code matching()}'s {@code reportedBy}, which is a substring LIKE for report
-     * filtering. The lecturer's "my cases" list must not widen: a substring match would show
-     * "Marie Uwase" the cases filed by "Dr. Marie Uwase".
+     * "Cases filed by this person", keyed on the reporter's account id.
+     *
+     * <p>The name is still accepted as a fallback so cases filed before {@code reportedByUserId}
+     * existed remain visible to their author — but the id wins where present. Matching on name alone
+     * meant renaming a lecturer orphaned every case they had filed, and an exact match was needed to
+     * stop "Marie Uwase" picking up cases filed by "Dr. Marie Uwase".
      */
-    public static Specification<DisciplinaryCase> reportedByExactly(String name) {
-        return name == null || name.isBlank()
-                ? (root, query, cb) -> cb.conjunction()
-                : (root, query, cb) -> cb.equal(root.get("reportedBy"), name);
+    public static Specification<DisciplinaryCase> reportedBy(Long userId, String name) {
+        boolean hasName = name != null && !name.isBlank();
+        if (userId == null) {
+            return hasName
+                    ? (root, query, cb) -> cb.equal(root.get("reportedBy"), name)
+                    : (root, query, cb) -> cb.conjunction();
+        }
+        return (root, query, cb) -> hasName
+                ? cb.or(cb.equal(root.get("reportedByUserId"), userId),
+                        cb.and(cb.isNull(root.get("reportedByUserId")), cb.equal(root.get("reportedBy"), name)))
+                : cb.equal(root.get("reportedByUserId"), userId);
+    }
+
+    /**
+     * Restricted-with-no-end-date, i.e. expelled. Needed as its own filter because every date-range
+     * predicate excludes NULLs, so an expulsion could not be selected by any combination of them.
+     */
+    public static Specification<DisciplinaryCase> suspensionEndMissing(Boolean missing) {
+        if (missing == null) {
+            return (root, query, cb) -> cb.conjunction();
+        }
+        return missing
+                ? (root, query, cb) -> cb.isNull(root.get("suspensionEnd"))
+                : (root, query, cb) -> cb.isNotNull(root.get("suspensionEnd"));
     }
 
     public static Specification<DisciplinaryCase> suspensionEndBetween(LocalDate from, LocalDate to) {

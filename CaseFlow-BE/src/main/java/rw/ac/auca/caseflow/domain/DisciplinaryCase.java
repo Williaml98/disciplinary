@@ -33,8 +33,22 @@ public class DisciplinaryCase {
     @Column(nullable = false)
     private String studentId;
 
+    /**
+     * Display name of the reporter, kept for showing on the case and in exports.
+     *
+     * <p>Not an identity. Matching cases to a lecturer by this string meant renaming someone in their
+     * profile silently orphaned every case they had filed — see {@link #reportedByUserId}.
+     */
     @Column(nullable = false)
     private String reportedBy;
+
+    /**
+     * Stable link to the reporter's account, written at report time from the authenticated caller.
+     *
+     * <p>Nullable because cases filed before this column existed have no id; those fall back to the
+     * name match, which is why {@code reportedBy} is still populated.
+     */
+    private Long reportedByUserId;
 
     private String reporterDepartment;
 
@@ -139,6 +153,14 @@ public class DisciplinaryCase {
 
     public String getReportedBy() {
         return reportedBy;
+    }
+
+    public Long getReportedByUserId() {
+        return reportedByUserId;
+    }
+
+    public void setReportedByUserId(Long reportedByUserId) {
+        this.reportedByUserId = reportedByUserId;
     }
 
     public String getReporterDepartment() {

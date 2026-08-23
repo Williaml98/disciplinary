@@ -38,6 +38,13 @@ public interface CaseRepository extends JpaRepository<DisciplinaryCase, String>,
 
     long countByRegistrationStatusAndSuspensionEndLessThan(RegistrationStatus status, LocalDate today);
 
+    /**
+     * Restricted with no end date — an expulsion. These matched neither the "active" nor the "expired"
+     * bucket (both compare against suspensionEnd, and NULL comparisons are never true), so expelled
+     * students were invisible on the registrar-alerts screen that exists to catch exactly them.
+     */
+    long countByRegistrationStatusAndSuspensionEndIsNull(RegistrationStatus status);
+
     /** Monthly totals for the admin overview chart, which until now rendered hardcoded sample data. */
     @Query("""
             select year(c.reportDate) as year, month(c.reportDate) as month, count(c) as count

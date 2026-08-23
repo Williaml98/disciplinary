@@ -24,6 +24,8 @@ public record CaseStatsResponse(
         long restricted,
         long activeSuspensions,
         long expiredSuspensions,
+        /** Restricted indefinitely — i.e. expelled. Counted separately because there is no end date. */
+        long indefiniteRestrictions,
         long registrationHolds
 ) {
 }

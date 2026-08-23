@@ -48,6 +48,8 @@ public class CaseStatsService {
                 .countByRegistrationStatusAndSuspensionEndGreaterThanEqual(RegistrationStatus.RESTRICTED, today);
         long expiredSuspensions = caseRepository
                 .countByRegistrationStatusAndSuspensionEndLessThan(RegistrationStatus.RESTRICTED, today);
+        long indefiniteRestrictions = caseRepository
+                .countByRegistrationStatusAndSuspensionEndIsNull(RegistrationStatus.RESTRICTED);
 
         return new CaseStatsResponse(
                 total,
@@ -61,11 +63,12 @@ public class CaseStatsService {
                 caseRepository.countByRegistrationStatus(RegistrationStatus.RESTRICTED),
                 activeSuspensions,
                 expiredSuspensions,
-                // Reproduces the frontend's previous alert-badge arithmetic exactly. Note what it
-                // leaves out: a RESTRICTED case with no suspensionEnd — i.e. an expulsion — lands in
-                // neither bucket. That's a pre-existing gap in the registrar alerts, preserved here so
-                // this change doesn't quietly move a number; worth fixing separately.
-                activeSuspensions + expiredSuspensions + flagged);
+                indefiniteRestrictions,
+                // Every student whose registration the registrar must not wave through. Expulsions are
+                // included: they are RESTRICTED with no end date, so they matched neither the active
+                // nor the expired bucket and were previously absent from this total entirely — the one
+                // group it is least acceptable to miss.
+                activeSuspensions + expiredSuspensions + indefiniteRestrictions + flagged);
     }
 
     /** Last {@value #MONTHS_OF_HISTORY} months, including months with no cases so the chart has no gaps. */

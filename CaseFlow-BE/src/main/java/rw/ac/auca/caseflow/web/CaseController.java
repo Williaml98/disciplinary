@@ -101,10 +101,12 @@ public class CaseController {
             @RequestParam(required = false) DecisionType decision,
             @RequestParam(required = false) String reporterDepartment,
             @RequestParam(required = false) String reportedByExact,
+            @RequestParam(required = false) Long reportedByUserId,
             @RequestParam(required = false) LocalDate reportDateFrom,
             @RequestParam(required = false) LocalDate reportDateTo,
             @RequestParam(required = false) LocalDate suspensionEndFrom,
             @RequestParam(required = false) LocalDate suspensionEndTo,
+            @RequestParam(required = false) Boolean suspensionEndMissing,
             @PageableDefault(size = 20) Pageable pageable) {
 
         // status/reportedBy are passed as null here: this endpoint uses the multi-valued and
@@ -116,8 +118,9 @@ public class CaseController {
                 .and(CaseSpecifications.visibleTo(caller.role(), caller.studentId()))
                 .and(CaseSpecifications.statusIn(status))
                 .and(CaseSpecifications.registrationStatus(registrationStatus))
-                .and(CaseSpecifications.reportedByExactly(reportedByExact))
+                .and(CaseSpecifications.reportedBy(reportedByUserId, reportedByExact))
                 .and(CaseSpecifications.suspensionEndBetween(suspensionEndFrom, suspensionEndTo))
+                .and(CaseSpecifications.suspensionEndMissing(suspensionEndMissing))
                 .and(CaseSpecifications.search(search));
 
         Pageable safe = PageableSupport.sanitize(
@@ -206,7 +209,8 @@ public class CaseController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('LECTURER','ADMIN')")
-    public CaseResponse reportCase(@Valid @RequestBody NewCaseRequest request) {
+    public CaseResponse reportCase(@Valid @RequestBody NewCaseRequest request,
+                                    @AuthenticationPrincipal AuthenticatedUser caller) {
         String id = caseNumberService.next();
         Instant now = Instant.now();
 
@@ -223,6 +227,9 @@ public class CaseController {
                 CaseStatus.REPORTED,
                 RegistrationStatus.FLAGGED
         );
+        // Stamped from the token, not the request body: the display name can be edited later, and a
+        // client could otherwise claim to be someone else.
+        disciplinaryCase.setReportedByUserId(caller.id());
         disciplinaryCase.addAuditEntry(new AuditEntry("Incident Reported", request.reportedBy(), now));
         disciplinaryCase.addAuditEntry(new AuditEntry("Case " + id + " Created", "System", now));
         disciplinaryCase.addAuditEntry(new AuditEntry("Committee Chair Notified", "System", now));
