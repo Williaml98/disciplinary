@@ -3,6 +3,7 @@ import { Eye, EyeOff, CheckCircle, AlertCircle, BookOpen, Users, GraduationCap, 
 import type { AppUser } from './mockData';
 import { updateUserProfile, changePassword, uploadProfilePicture, removeProfilePicture } from '../../lib/api';
 import { Avatar } from './Avatar';
+import { DepartmentSelect } from './DepartmentSelect';
 import { notifyError, notifySuccess } from '../../lib/toast';
 
 interface Props {
@@ -36,7 +37,9 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
   // Profile info state
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
-  const [extra, setExtra] = useState(user.studentId || user.department || '');
+  // Student ID and department are separate fields, not one shared "extra" — a student has both, and
+  // conflating them meant a student could never set their programme.
+  const [department, setDepartment] = useState(user.department || '');
   const [profileErrors, setProfileErrors] = useState<Record<string, string>>({});
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploadingPicture, setUploadingPicture] = useState(false);
@@ -83,8 +86,7 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
     const errors: Record<string, string> = {};
     if (!name.trim()) errors.name = 'Name is required.';
     if (!email.trim()) errors.email = 'Email is required.';
-    if (isStudent && !extra.trim()) errors.extra = 'Student ID is required.';
-    if (!isStudent && !extra.trim()) errors.extra = 'Department is required.';
+    if (!department.trim()) errors.department = isStudent ? 'Programme is required.' : 'Department is required.';
     setProfileErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
@@ -93,7 +95,10 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
       const updated = await updateUserProfile(user.id, {
         name: name.trim(),
         email: email.trim(),
-        ...(isStudent ? { studentId: extra.trim() } : { department: extra.trim() }),
+        department: department.trim(),
+        // Sent unchanged. Only an admin may alter a student's ID (it's the key tying them to their
+        // case), so echoing the current value keeps this a no-op rather than a 403.
+        ...(user.studentId ? { studentId: user.studentId } : {}),
       });
       onUpdate(updated);
       notifySuccess('Profile updated.');
@@ -239,13 +244,22 @@ export function ProfilePage({ user, onUpdate, onClose }: Props) {
               </ProfileField>
             </div>
 
-            <ProfileField label={isStudent ? 'Student ID' : 'Department'} error={profileErrors.extra}>
-              <input
-                type="text"
-                value={extra}
-                onChange={e => { setExtra(e.target.value); setProfileErrors(p => ({ ...p, extra: '' })); }}
-                placeholder={isStudent ? 'e.g. 21045' : 'e.g. Computer Science'}
-                className={inputCls(!!profileErrors.extra)}
+            {isStudent && (
+              <ProfileField label="Student ID">
+                <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl">
+                  <span className="text-sm text-gray-700">{user.studentId}</span>
+                  <span className="text-xs text-gray-400">Contact the Registrar to change this</span>
+                </div>
+              </ProfileField>
+            )}
+
+            <ProfileField label={isStudent ? 'Programme' : 'Department'} error={profileErrors.department}>
+              <DepartmentSelect
+                role={user.role}
+                value={department}
+                onChange={v => { setDepartment(v); setProfileErrors(p => ({ ...p, department: '' })); }}
+                placeholder={isStudent ? 'Select your programme…' : 'Select your department…'}
+                className={inputCls(!!profileErrors.department)}
                 onFocus={focusStyle}
                 onBlur={blurStyle}
               />
@@ -390,12 +404,12 @@ function inputCls(hasError: boolean) {
   return `w-full border ${hasError ? 'border-red-400 bg-red-50' : 'border-gray-300'} rounded-xl px-4 py-2.5 text-sm focus:outline-none transition-colors`;
 }
 
-function focusStyle(e: React.FocusEvent<HTMLInputElement>) {
+function focusStyle(e: React.FocusEvent<HTMLElement>) {
   e.currentTarget.style.boxShadow = '0 0 0 2px #1D3A5F40';
   e.currentTarget.style.borderColor = '#1D3A5F';
 }
 
-function blurStyle(e: React.FocusEvent<HTMLInputElement>) {
+function blurStyle(e: React.FocusEvent<HTMLElement>) {
   e.currentTarget.style.boxShadow = '';
   e.currentTarget.style.borderColor = '';
 }

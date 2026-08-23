@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from './ui/table';
 import type { CaseStatus, DecisionType } from './mockData';
 import { downloadCasesReport, previewCasesReport } from '../../lib/api';
+import { STAFF_DEPARTMENT_GROUPS, STUDENT_DEPARTMENT_GROUPS } from './departments';
 import { notifyError, notifySuccess } from '../../lib/toast';
 
 const NAVY = '#1D3A5F';
@@ -167,9 +168,18 @@ export function ReportsPage() {
               </div>
               <div>
                 <label className={LABEL_CLS}>Department</label>
-                <input type="text" value={filters.reporterDepartment}
+                {/* The backend matches this as a case-insensitive substring, so picking a faculty
+                    also matches the departments filed under it. */}
+                <select value={filters.reporterDepartment}
                   onChange={e => update('reporterDepartment', e.target.value)}
-                  placeholder="e.g. Computer Science" className={INPUT_CLS} />
+                  className={INPUT_CLS}>
+                  <option value="">Any department</option>
+                  {[...STAFF_DEPARTMENT_GROUPS, ...STUDENT_DEPARTMENT_GROUPS].map(group => (
+                    <optgroup key={group.group} label={group.group}>
+                      {group.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
               </div>
               <div className="sm:col-span-2">
                 <label className={LABEL_CLS}>Reported By</label>

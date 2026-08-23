@@ -6,7 +6,7 @@ import {
   sendPasswordResetOtp, resetPassword, ApiError,
 } from '../../lib/api';
 import logo from '../../imports/logo.png';
-import { DEPARTMENTS } from './departments';
+import { DepartmentSelect } from './DepartmentSelect';
 
 const NAVY = '#1D3A5F';
 const ACCENT = '#9CC7EE';
@@ -389,16 +389,15 @@ function RegisterForm({ onRegister, onSwitchToLogin }: {
           </RegField>
 
           <RegField label="Department" error={detailErrors.department}>
-            <select
+            <DepartmentSelect
+              role="student"
               value={details.department}
-              onChange={e => { setDetails(d => ({ ...d, department: e.target.value })); setDetailErrors(p => ({ ...p, department: '' })); }}
+              onChange={v => { setDetails(d => ({ ...d, department: v })); setDetailErrors(p => ({ ...p, department: '' })); }}
+              placeholder="Select your programme…"
               className={inputCls(!!detailErrors.department)}
               onFocus={focusStyle}
               onBlur={blurStyle}
-            >
-              <option value="">Select your department…</option>
-              {DEPARTMENTS.map(dept => <option key={dept} value={dept}>{dept}</option>)}
-            </select>
+            />
           </RegField>
 
           <RegField label="Email Address" error={detailErrors.email}>

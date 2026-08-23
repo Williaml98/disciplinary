@@ -14,7 +14,7 @@ import { useCaseStats, useDebouncedValue, useMonthlyCaseCounts, useUserStats } f
 import { Pagination } from './Pagination';
 import { Avatar } from './Avatar';
 import { StatusChanger } from './StatusChanger';
-import { DEPARTMENTS } from './departments';
+import { DepartmentSelect } from './DepartmentSelect';
 import type { AuditFeedEntry, CaseStatus, UserImpact } from './mockData';
 import { notifyError, notifySuccess, toMessage } from '../../lib/toast';
 
@@ -121,7 +121,7 @@ export function AdminDashboard({ user, onLogout, onUpdateProfile }: Props) {
                     <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#9ca3af' }} />
                     <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} allowDecimals={false} />
                     <Tooltip contentStyle={{ borderRadius: '10px', border: '1px solid #e5e7eb', fontSize: '12px' }} />
-                    <Bar dataKey="cases" name="Cases Reported" fill="#1D3A5F" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="count" name="Cases Reported" fill="#1D3A5F" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -616,7 +616,7 @@ function CreateAccountModal({ onCreate, onClose }: {
     // that array only holds one page, so it would miss most collisions. The backend returns a 409.
     if (!form.role) e.role = 'Please select a role.';
     if (isStudent && !form.studentId.trim()) e.studentId = 'Student ID is required.';
-    if (needsDept && !form.department.trim()) e.department = 'Department is required.';
+    if (!form.department.trim()) e.department = isStudent ? 'Programme is required.' : 'Department is required.';
     return e;
   }
 
@@ -688,13 +688,21 @@ function CreateAccountModal({ onCreate, onClose }: {
               </ModalField>
             )}
 
-            {needsDept && (
-              <ModalField label="Department" error={errors.department}>
-                <select value={form.department} onChange={e => set('department', e.target.value)}
-                  className={inputCls(!!errors.department)} onFocus={focusStyleSelect} onBlur={blurStyleSelect}>
-                  <option value="">Select a department…</option>
-                  {DEPARTMENTS.map(dept => <option key={dept} value={dept}>{dept}</option>)}
-                </select>
+            {/* Every role has a department — a student's is their programme, a staff member's is
+                their faculty or office. Students previously got only a student ID here, so an
+                admin-created student ended up with no department while a self-registered one had to
+                supply it. */}
+            {form.role && (
+              <ModalField label={isStudent ? 'Programme' : 'Department'} error={errors.department}>
+                <DepartmentSelect
+                  role={form.role}
+                  value={form.department}
+                  onChange={v => set('department', v)}
+                  placeholder={isStudent ? 'Select a programme…' : 'Select a department…'}
+                  className={inputCls(!!errors.department)}
+                  onFocus={focusStyleSelect}
+                  onBlur={blurStyleSelect}
+                />
               </ModalField>
             )}
 
@@ -804,20 +812,24 @@ function EditAccountModal({ user, onSaved, onClose }: {
                 className={inputCls(!!errors.email)} onFocus={focusStyle} onBlur={blurStyle} />
             </ModalField>
 
-            {isStudent ? (
+            {isStudent && (
               <ModalField label="Student ID" error={errors.studentId}>
                 <input type="text" value={form.studentId} onChange={e => set('studentId', e.target.value)}
                   className={inputCls(!!errors.studentId)} onFocus={focusStyle} onBlur={blurStyle} />
               </ModalField>
-            ) : (
-              <ModalField label="Department" error={errors.department}>
-                <select value={form.department} onChange={e => set('department', e.target.value)}
-                  className={inputCls(!!errors.department)} onFocus={focusStyleSelect} onBlur={blurStyleSelect}>
-                  <option value="">No department</option>
-                  {DEPARTMENTS.map(dept => <option key={dept} value={dept}>{dept}</option>)}
-                </select>
-              </ModalField>
             )}
+
+            <ModalField label={isStudent ? 'Programme' : 'Department'} error={errors.department}>
+              <DepartmentSelect
+                role={user.role}
+                value={form.department}
+                onChange={v => set('department', v)}
+                placeholder="No department"
+                className={inputCls(!!errors.department)}
+                onFocus={focusStyleSelect}
+                onBlur={blurStyleSelect}
+              />
+            </ModalField>
 
             {isStudent && (
               <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
